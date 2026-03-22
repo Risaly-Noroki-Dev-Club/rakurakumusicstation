@@ -19,9 +19,6 @@
 
 namespace fs = std::filesystem;
 
-// =============================================================================
-// 多消费者安全环形队列 - 每个消费者独立读取位置
-// =============================================================================
 class BroadcastRing {
 public:
     explicit BroadcastRing(size_t cap = 256 * 1024) 
@@ -32,7 +29,7 @@ public:
         }
     }
 
-    // 生产者写入（线程安全）
+    // 生产者写入
     void push(const char* data, size_t len) {
         if (len == 0 || len > capacity_) return;
         
@@ -46,15 +43,15 @@ public:
             std::memcpy(&buffer_[0], data + first_seg, len - first_seg);
         }
         
-        // 原子更新写位置（release语义）
+        // 原子更新写位置
         write_pos_.store(new_wp, std::memory_order_release);
         
-        // 通知消费者有新数据
+        // 新数据
         notify_counter_.fetch_add(1, std::memory_order_relaxed);
         cv_.notify_all();
     }
 
-    // 消费者读取 - 不修改全局状态，返回可用数据量
+    // 不修改全局状态，返回可用数据量
     size_t read(size_t& consume_pos, char* dest, size_t max_len) const {
         size_t wp = write_pos_.load(std::memory_order_acquire);
         size_t rp = consume_pos;
@@ -72,7 +69,7 @@ public:
             std::memcpy(dest + first_seg, &buffer_[0], to_read - first_seg);
         }
         
-        // 更新消费者独立位置
+        // 更新独立位置
         consume_pos = (rp + to_read) & mask_;
         return to_read;
     }
@@ -97,9 +94,6 @@ private:
     std::condition_variable cv_;
 };
 
-// =============================================================================
-// 客户端会话 - 事件驱动，无独立线程
-// =============================================================================
 class ClientSession : public std::enable_shared_from_this<ClientSession> {
 public:
     ClientSession(int fd, BroadcastRing* broadcast)
@@ -146,7 +140,7 @@ public:
         }
     }
 
-    // 处理可写事件 - 返回false表示需要关闭
+    // 处理可写事件 
     bool handle_write() {
         // 先发送头部
         if (!header_sent_) {
@@ -196,9 +190,6 @@ private:
     bool header_sent_{false};
 };
 
-// =============================================================================
-// 全局状态
-// =============================================================================
 struct RadioState {
     std::mutex playlist_mutex;
     std::vector<std::string> playlist;
@@ -215,17 +206,12 @@ struct RadioState {
     int server_fd{-1};
 } state;
 
-// =============================================================================
-// 信号处理
-// =============================================================================
 void signal_handler(int sig) {
     (void)sig;
     state.running = false;
 }
 
-// =============================================================================
-// 流媒体服务器 - 事件驱动架构
-// =============================================================================
+// 流媒体服务器
 void stream_server() {
     // 创建监听 socket
     state.server_fd = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -374,7 +360,7 @@ void stream_server() {
 }
 
 // =============================================================================
-// 音频管道 - 带超时控制的 FFmpeg 转码
+// 音频管道
 // =============================================================================
 void audio_pipeline() {
     signal(SIGPIPE, SIG_IGN);
@@ -601,7 +587,7 @@ int main() {
     std::thread t_streamer(stream_server);
     std::thread t_audio(audio_pipeline);
     
-    web_server();  // 主线程运行（异步模式）
+    web_server();  // 主线程运行
     
     // 等待退出
     state.running = false;
