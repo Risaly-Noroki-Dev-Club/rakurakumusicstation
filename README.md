@@ -57,5 +57,5 @@ g++ radioserver.cpp -o radioserver -std=c++17 -lpthread -lssl -lcrypto -I. -O3
 本项目采用 Apache License 2.0 协议开源。详情请参阅项目中的 LICENSE 文件。
 #### 🤝 鸣谢 (Acknowledgments)
 本项目在开发过程中得到了许多支持，在此特别鸣谢 Cynun。
-感谢 ta 在逻辑架构设计、代码重构以及疑难 Bug 调试过程中提供的关键技术支持。要是没有 Cynun，我完不成这个计划。
+感谢 ta 提供的支持。要是没有 Cynun，我完不成这个计划。
 Copyright © 2026. Licensed under the Apache License, Version 2.0.
