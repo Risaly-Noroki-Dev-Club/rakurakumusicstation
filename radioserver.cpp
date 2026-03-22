@@ -1084,13 +1084,13 @@ private:
 </body>
 </html>
 )rawhtml"; // 结束定界符也要匹配
-        return crow::response(html.str());
+        return crow::response(html);
     });
     
         // API: 播放列表
         CROW_ROUTE(app_, "/api/playlist")
         ([this]() {
-            std::lock_guard<std::mutex> lock(playlist_mutex_);
+            std::lock_guard<std::mutex> lock(*playlist_mutex_);
             crow::json::wvalue result;
             result["playlist"] = *playlist_;
             result["current"] = current_track_->load();
@@ -1100,7 +1100,7 @@ private:
         // API: 播放指定曲目
         CROW_ROUTE(app_, "/api/play/<int>")
         ([this](int index) {
-            std::lock_guard<std::mutex> lock(playlist_mutex_);
+            std::lock_guard<std::mutex> lock(*playlist_mutex_);
             if (index >= 0 && index < playlist_->size()) {
                 current_track_->store(index);
                 if (audio_player_) audio_player_->skip_current_track();
@@ -1122,7 +1122,7 @@ private:
             crow::json::wvalue result;
             result["clients"] = stream_server_ ? stream_server_->client_count() : 0;
             {
-                std::lock_guard<std::mutex> lock(playlist_mutex_);
+                std::lock_guard<std::mutex> lock(*playlist_mutex_);
                 result["tracks"] = playlist_->size();
                 result["current"] = current_track_->load();
             }
@@ -1217,7 +1217,7 @@ private:
                 
                 // 添加到播放列表
                 {
-                    std::lock_guard<std::mutex> lock(playlist_mutex_);
+                    std::lock_guard<std::mutex> lock(*playlist_mutex_);
                     playlist_->push_back(safe_filename);
                     std::sort(playlist_->begin(), playlist_->end());
                 }
