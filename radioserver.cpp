@@ -663,7 +663,7 @@ private:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>流媒体电台</title>
+    <title>Rakuraku music station </title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -887,15 +887,15 @@ private:
 <body>
     <div class="container">
         <header>
-            <h1><span class="icon">🎵</span> 流媒体电台</h1>
-            <div class="subtitle">在线音乐广播，随时随地享受高品质音乐</div>
+            <h1><span class="icon">🎵</span> Rakuraku Music Station</h1>
+            <div class="subtitle">咕咕嘎嘎</div>
         </header>
         
         <section class="player-section">
             <h2><span class="icon">▶️</span> 当前播放</h2>
             <audio id="player" controls autoplay>
                 <source src="http://localhost:)" << Config::STREAM_PORT << R"(" type="audio/mpeg">
-                您的浏览器不支持音频播放
+                您的浏览器不支持音频播放(⁠ʘ⁠ᗩ⁠ʘ⁠’⁠)
             </audio>
             <div class="controls">
                 <button onclick="playNext()">
@@ -937,7 +937,7 @@ private:
         </div>
         
         <footer>
-            <p>© 2024 流媒体电台 | 服务器运行中 | 端口: )" << Config::WEB_PORT << " (Web), " << Config::STREAM_PORT << " (Stream)</p>
+            <p>© Rakuraku music station| 服务器运行中 | 端口: )" << Config::WEB_PORT << " (Web), " << Config::STREAM_PORT << " (Stream)</p>
         </footer>
     </div>
 
@@ -1300,7 +1300,7 @@ public:
         
         std::cout << "\n"
             "╔══════════════════════════════════════════╗\n"
-            "║        流媒体电台服务器启动中...        ║\n"
+            "║        Rakuraku启动中...        ║\n"
             "╚══════════════════════════════════════════╝\n" << std::endl;
         
         // 启动各个组件
