@@ -1,68 +1,127 @@
 #!/bin/bash
 
+# =============================================================================
+# Rakuraku Music Station - 自动化构建与部署脚本
+# =============================================================================
+
+set -e  # 遇到错误立即退出
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+PURPLE='\033[0;35m'
+NC='\033[0m' 
 
-echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║  Rakuraku Music Station Release Build  ║${NC}"
-echo -e "${BLUE}╚════════════════════════════════════════╝${NC}\n"
+echo -e "${BLUE}====================================================${NC}"
+echo -e "${BLUE}   Rakuraku Music Station Release Builder v2.0      ${NC}"
+echo -e "${BLUE}====================================================${NC}\n"
 
-# 1. 检查依赖
-echo -e "${YELLOW}[1/6] 检查编译环境...${NC}"
+# 1. 环境依赖深度检查
+echo -e "${YELLOW}[1/6] 检查系统依赖...${NC}"
 
-if ! command -v g++ &> /dev/null; then
-    echo -e "${RED}✗ g++ 未安装${NC}"
-    echo "执行: sudo apt install build-essential"
-    exit 1
+check_cmd() {
+    if ! command -v $1 &> /dev/null; then
+        echo -e "${RED}✗ 错误: 未安装 $1${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ 已检测到 $1${NC}"
+    return 0
+}
+
+check_cmd g++ || { echo "请执行: sudo apt install build-essential"; exit 1; }
+check_cmd ffmpeg || { echo "请执行: sudo apt install ffmpeg"; exit 1; }
+
+# 检查 Locale 环境 (防止你的 zh_CN 代码崩溃)
+if ! locale -a | grep -qi "zh_CN.utf8"; then
+    echo -e "${PURPLE}! 提醒: 系统未发现 zh_CN.UTF-8，程序运行时可能报错。${NC}"
+    echo -e "  建议执行: sudo locale-gen zh_CN.UTF-8 && sudo update-locale"
 fi
-echo -e "${GREEN}✓ g++ 已安装${NC}"
 
-if ! command -v ffmpeg &> /dev/null; then
-    echo -e "${RED}✗ ffmpeg 未安装${NC}"
-    echo "执行: sudo apt install ffmpeg"
-    exit 1
-fi
-echo -e "${GREEN}✓ ffmpeg 已安装${NC}"
+# 2. 清理与准备
+echo -e "\n${YELLOW}[2/6] 准备工作目录...${NC}"
+BUILD_DIR="build_tmp"
+RELEASE_DIR="dist"
 
-# 检查必要的库
-if ! pkg-config --exists openssl 2>/dev/null; then
-    echo -e "${RED}✗ OpenSSL 开发库未安装${NC}"
-    echo "执行: sudo apt install libssl-dev"
-    exit 1
-fi
-echo -e "${GREEN}✓ OpenSSL 已安装${NC}"
+rm -rf $BUILD_DIR $RELEASE_DIR
+mkdir -p $BUILD_DIR
+mkdir -p $RELEASE_DIR/media  # 存放音乐
+echo -e "${GREEN}✓ 目录已重置${NC}"
 
-# 2. 清理旧构建
-echo -e "\n${YELLOW}[2/6] 清理旧构建文件...${NC}"
-rm -rf build release radioserver radioserver_release
-echo -e "${GREEN}✓ 清理完成${NC}"
+# 3. 极致性能编译 (Release 模式)
+echo -e "\n${YELLOW}[3/6] 开始极致优化编译 (O3 + LTO)...${NC}"
 
-# 3. 创建编译目录
-echo -e "\n${YELLOW}[3/6] 创建编译目录...${NC}"
-mkdir -p release
-cd release
-echo -e "${GREEN}✓ 目录已创建${NC}"
-
-# 4. 编译
-echo -e "\n${YELLOW}[4/6] 编译源代码（Release 模式）...${NC}"
-echo "编译命令:"
-echo "g++ ../radioserver.cpp -o radioserver_release \\"
-echo "    -std=c++17 \\"
-echo "    -lpthread -lssl -lcrypto \\"
-echo "    -O3 -march=native -flto \\"
-echo "    -I.. -w"
-echo ""
-
-g++ ../radioserver.cpp -o radioserver_release \
+# 参数说明:
+# -O3: 最高级优化
+# -flto: 链接时优化，能跨文件优化二进制流
+# -s: 移除符号表
+# -DNDEBUG: 禁用断言
+# -march=native: 针对当前CPU生成指令(若需跨机分发请移除此项)
+g++ radioserver.cpp -o $RELEASE_DIR/radioserver \
     -std=c++17 \
+    -O3 -flto -DNDEBUG \
     -lpthread -lssl -lcrypto \
-    -O3 -march=native -flto \
-    -I.. -w
+    -I. -w
 
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓ 核心程序编译成功${NC}"
+else
+    echo -e "${RED}✗ 编译失败，请检查 C++ 语法错误${NC}"
+    exit 1
+fi
+
+# 4. 二进制精简
+echo -e "\n${YELLOW}[4/6] 二进制体积精简...${NC}"
+BEFORE_SIZE=$(ls -lh $RELEASE_DIR/radioserver | awk '{print $5}')
+strip $RELEASE_DIR/radioserver
+AFTER_SIZE=$(ls -lh $RELEASE_DIR/radioserver | awk '{print $5}')
+echo -e "${GREEN}✓ 体积压缩完成: $BEFORE_SIZE -> $AFTER_SIZE${NC}"
+
+# 5. 生成辅助脚本
+echo -e "\n${YELLOW}[5/6] 生成管理脚本...${NC}"
+
+# 生成启动脚本
+cat <<EOF > $RELEASE_DIR/start.sh
+#!/bin/bash
+# 自动创建媒体目录
+mkdir -p media
+# 检查ffmpeg
+if ! command -v ffmpeg &> /dev/null; then
+    echo "错误: 运行环境缺少 ffmpeg，无法解码音乐。"
+    exit 1
+fi
+echo "电台启动中... Web界面: http://localhost:2240"
+nohup ./radioserver > server.log 2>&1 &
+echo \$! > .server.pid
+echo "服务已进入后台运行，PID: \$(cat .server.pid)"
+EOF
+
+# 生成停止脚本
+cat <<EOF > $RELEASE_DIR/stop.sh
+#!/bin/bash
+if [ -f .server.pid ]; then
+    PID=\$(cat .server.pid)
+    kill \$PID && rm .server.pid
+    echo "服务已停止 (PID: \$PID)"
+else
+    pkill radioserver
+    echo "已尝试停止所有 radioserver 进程"
+fi
+EOF
+
+chmod +x $RELEASE_DIR/*.sh
+echo -e "${GREEN}✓ 管理脚本 (start.sh/stop.sh) 已生成${NC}"
+
+# 6. 发布总结
+echo -e "\n${BLUE}====================================================${NC}"
+echo -e "${GREEN}        构建成功! 产物已存至: ./$RELEASE_DIR         ${NC}"
+echo -e "${BLUE}====================================================${NC}"
+echo -e "${YELLOW}使用说明:${NC}"
+echo -e "1. 将音乐文件放入 ${RELEASE_DIR}/media 文件夹"
+echo -e "2. 执行 ${RELEASE_DIR}/start.sh 启动服务"
+echo -e "3. 访问 Web 页面: http://$(hostname -I | awk '{print $1}'):2240"
+echo -e "${BLUE}====================================================${NC}\n"
 if [ $? -ne 0 ]; then
     echo -e "${RED}✗ 编译失败${NC}"
     exit 1
