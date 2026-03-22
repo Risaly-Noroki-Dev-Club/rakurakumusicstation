@@ -9,14 +9,14 @@
  * 智能播放列表：自动扫描 ./media 目录，支持动态更新及上传新曲目。
  * 优雅停机：完善的信号处理机制，确保在服务器关闭时正确释放 Socket 和文件句柄。
 
-####🛠️ 技术栈
+#### 🛠️ 技术栈
  * 内核：C++17 标准
  * 底层 I/O：Linux epoll, POSIX Threads, Pipes
  * Web 框架：Crow (Header-only)
  * 编解码后端：FFmpeg
  * 加密/通讯：OpenSSL, Libcrypto
 
-####🚀 编译与运行
+#### 🚀 编译与运行
 ### 1. 准备环境
 确保您的 Linux 环境已安装以下依赖：
 Ubuntu/Debian
