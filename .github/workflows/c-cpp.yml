@@ -11,20 +11,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+      # 1. 拉取你的代码
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Install Dependencies
-      # 安装 Crow 所需的依赖库
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential libboost-all-dev asio-dev
+      # 2. 安装系统依赖 (补全了之前报错的 libasio-dev 和必备的 SSL)
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libboost-all-dev libasio-dev libssl-dev
 
-    - name: Download Crow
-      # 从 GitHub 下载 Crow 的头文件到当前目录
-      run: |
-        wget https://github.com/CrowCpp/Crow/releases/download/v1.2.0/crow_all.h -O crow.h
+      # 3. 下载 Crow 框架的单头文件
+      # 这样你的 #include <crow.h> 就能在当前目录下找到了
+      - name: Download Crow Header
+        run: |
+          wget https://github.com/CrowCpp/Crow/releases/download/v1.2.0/crow_all.h -O crow.h
 
-    - name: Compile
-      # 编译时需要链接 pthread 库，并且使用刚才下载的 crow.h
-      # 注意：如果代码里写的是 #include <crow.h>，下载的文件名必须匹配
-      run: g++ radioserver.cpp -o radioserver -lpthread
+      # 4. 编译程序
+      # 链接了 pthread (多线程), ssl 和 crypto (加密相关，Crow 运行通常需要)
+      - name: Compile
+        run: |
+          g++ radioserver.cpp -o radioserver -lpthread -lssl -lcrypto -I.
+
+      # 5. 验证编译结果
+      - name: Check Build
+        run: |
+          if [ -f "./radioserver" ]; then
+            echo "编译成功！文件已生成。"
+          else
+            echo "编译失败！"
+            exit 1
+          fi
