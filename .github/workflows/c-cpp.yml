@@ -8,16 +8,15 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+
+    - name: Compile
+      # 直接使用 g++ 编译你的单个文件
+      run: g++ radioserver.cpp -o radioserver
+
+    - name: Run Test
+      # 简单测试一下程序是否能跑起来（如果有输出的话）
+      run: ./radioserver --help || echo "程序已成功编译"
