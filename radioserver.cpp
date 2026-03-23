@@ -336,6 +336,9 @@ private:
                 }
             }
             
+            // 向所有客户端广播音频数据
+            broadcast_audio();
+
             // 定期清理无效连接
             static int cleanup_counter = 0;
             if (++cleanup_counter >= 100) {  // 每10秒清理一次
@@ -371,7 +374,7 @@ private:
             
             // 注册到epoll
             epoll_event ev{};
-            ev.events = EPOLLOUT | EPOLLRDHUP | EPOLLET;
+            ev.events = EPOLLOUT | EPOLLRDHUP;
             ev.data.fd = client_fd;
             
             if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, client_fd, &ev) < 0) {
@@ -432,6 +435,29 @@ private:
         }
     }
     
+    void broadcast_audio() {
+        std::vector<std::pair<int, std::shared_ptr<ClientConnection>>> snapshot;
+        {
+            std::lock_guard<std::mutex> lock(clients_mutex_);
+            snapshot.assign(clients_.begin(), clients_.end());
+        }
+
+        std::vector<int> dead;
+        for (auto& [fd, client] : snapshot) {
+            if (client->is_shutdown()) {
+                dead.push_back(fd);
+                continue;
+            }
+            if (!client->send_header() || !client->send_audio()) {
+                dead.push_back(fd);
+            }
+        }
+
+        for (int fd : dead) {
+            remove_client(fd);
+        }
+    }
+
     void cleanup_dead_clients() {
         std::vector<int> dead_clients;
         
@@ -538,7 +564,7 @@ private:
           << " (" << track_idx + 1 << "/" << playlist_->size() << ")" << std::endl;
         
         // 构建FFmpeg命令
-        std::string cmd = "ffmpeg -v error -i \"" + filename + "\" "
+        std::string cmd = "ffmpeg -re -v error -i \"" + filename + "\" "
                   "-vn -codec:a libmp3lame -b:a 128k -ar 44100 -ac 2 -f mp3 -";
         
         FILE* pipe = popen(cmd.c_str(), "r");
@@ -574,7 +600,9 @@ private:
                             error_occurred = true;
                         }
                     }
-                } else if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                } else if (pfd.revents & POLLHUP) {
+                    break;  // Normal EOF: FFmpeg finished encoding
+                } else if (pfd.revents & (POLLERR | POLLNVAL)) {
                     std::cerr << "[Audio] Pipe error: revents=" << pfd.revents << std::endl;
                     error_occurred = true;
                 }
