@@ -538,7 +538,7 @@ private:
           << " (" << track_idx + 1 << "/" << playlist_->size() << ")" << std::endl;
         
         // 构建FFmpeg命令
-        std::string cmd = "ffmpeg -v quiet -i \"" + filename + "\" "
+        std::string cmd = "ffmpeg -v error -i \"" + filename + "\" "
                   "-vn -codec:a libmp3lame -b:a 128k -ar 44100 -ac 2 -f mp3 -";
         
         FILE* pipe = popen(cmd.c_str(), "r");
