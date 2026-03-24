@@ -30,7 +30,7 @@ elif [ -f /etc/debian_version ] || [ -f /etc/lsb-release ]; then
     OS="Debian"
     PKG_MGR="apt"
     INSTALL_CMD="sudo apt-get install -y"
-    DEPS="build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev locales wget strip"
+    DEPS="build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev locales wget"
     echo -e "${GREEN}检测到系统类型: Debian/Ubuntu/WSL${NC}"
 else
     echo -e "${RED}抱歉，暂不支持此发行版。脚本仅支持 Arch 或 Debian/Ubuntu 系列。${NC}"
