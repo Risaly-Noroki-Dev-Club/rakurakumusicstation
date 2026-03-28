@@ -70,15 +70,13 @@ else
     echo -e "${GREEN}✓ 静态全量版 FFmpeg 已部署${NC}"
 fi
 
-# 5. 极致性能编译
+# 5. 编译
 echo -e "\n${YELLOW}[5/6] 编译服务器核心...${NC}"
 RELEASE_DIR="dist"
 rm -rf $RELEASE_DIR && mkdir -p $RELEASE_DIR/media
 
 # 针对 CPU 进行原生优化 (-march=native)
-g++ radioserver.cpp -o $RELEASE_DIR/radioserver \
-    -std=c++17 -O3 -flto -march=native \
-    -lpthread -lssl -lcrypto -I. -w
+g++ radioserver.cpp -o $RELEASE_DIR/radioserver -std=c++17 -O3 -flto -march=native -lpthread -lssl -lcrypto -I. -w
 
 if [ -f "$RELEASE_DIR/radioserver" ]; then
     # 移除调试符号以减小体积
