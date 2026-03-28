@@ -40,6 +40,10 @@ fi
 # 2. 自动化安装依赖
 echo -e "\n${YELLOW}[2/6] 正在同步系统依赖...${NC}"
 if [ "$PKG_MGR" == "apt" ]; then sudo apt-get update; fi
+if [ ! -f "crow_all.h" ]; then echo -e "${PURPLE}正在下载 Crow 框架核心组件...${NC}"
+wget -q https://github.com/CrowCpp/Crow/releases/download/v1.0+5/crow_all.h
+    echo -e "${GREEN}✓ Crow 已就绪${NC}"
+fi
 $INSTALL_CMD $DEPS
 
 # 3. 强制修复 Locale 
