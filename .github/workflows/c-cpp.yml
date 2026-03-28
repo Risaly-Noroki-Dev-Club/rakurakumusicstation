@@ -1,11 +1,13 @@
-name: Rakuraku Auto-Release
+name: Rakuraku Manual Release
 
-# 每次向 main 分支 push 代码时自动触发
+# 核心修改：仅保留手动触发和标签触发（可选）
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch: # 点击按钮触发
+  workflow_dispatch: # 允许在 GitHub Actions 页面手动点击运行
+    inputs:
+      version_name:
+        description: '版本号 (例如 v1.0.2)'
+        required: true
+        default: 'v1.0.0'
 
 permissions:
   contents: write
@@ -15,49 +17,38 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 检出代码
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. 安装依赖
       - name: Install Dependencies
         run: |
           sudo apt-get update
+          # 确保包含 libasio-dev 解决 asio.hpp 缺失问题
           sudo apt-get install -y build-essential libssl-dev libboost-all-dev ffmpeg wget libasio-dev
 
-      # 3. 准备 Crow 头文件
       - name: Prepare Crow Header
         run: |
-          if [ ! -f "crow_all.h" ]; then
-            echo "Crow header not found, downloading..."
-            wget https://github.com/CrowCpp/Crow/releases/download/v1.2.0/crow_all.h -O crow_all.h
-          fi
+          # 统一代码中的引用：下载并重命名为 crow_all.h
+          wget https://github.com/CrowCpp/Crow/releases/download/v1.2.0/crow_all.h -O crow_all.h
 
-      # 4. 执行脚本
       - name: Run Build Script
         run: |
           chmod +x build_release.sh
-          # 确保构建脚本能正确执行并生成 dist 目录
+          # 运行你的构建脚本
           ./build_release.sh
 
-      # 5. 打包产物
       - name: Package Artifacts
         run: |
-          
-      # 6. 自动发布 Release
+          # 打包 dist 目录
+          tar -czvf rakuraku-radio-linux-x64.tar.gz -C dist .
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          # 使用构建号作为版本号
-          tag_name: "b${{ github.run_number }}"
-          name: "自动构建版本 - No.${{ github.run_number }}"
-          body: |
-            ## 自动构建说明
-            - **提交信息**: ${{ github.event.head_commit.message }}
-            - **构建时间**: ${{ github.event.head_commit.timestamp }}
-            - **文件说明**: 解压后直接运行 `./start.sh` 即可启动。
+          # 使用你在手动触发时输入的版本号
+          tag_name: ${{ github.event.inputs.version_name }}
+          name: "Release ${{ github.event.inputs.version_name }}"
+          body: "手动触发的构建版本。基于提交: ${{ github.sha }}"
           files: rakuraku-radio-linux-x64.tar.gz
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
