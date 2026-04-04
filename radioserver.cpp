@@ -1,3 +1,6 @@
+#define CROW_ENABLE_ASIO
+#define ASIO_STANDALONE
+
 #include <crow_all.h>
 #include <sys/epoll.h>
 #include <atomic>
