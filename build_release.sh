@@ -91,6 +91,22 @@ else
     exit 1
 fi
 
+# 【新增】复制前端文件和配置文件到发布目录
+echo -e "\n${YELLOW}[5.5/6] 复制前端资源...${NC}"
+if [ -f "index.html" ]; then
+    cp index.html $RELEASE_DIR/
+    echo -e "${GREEN}✓ index.html 已复制${NC}"
+else
+    echo -e "${YELLOW}! 警告: 未找到 index.html${NC}"
+fi
+
+if [ -f "settings.json" ]; then
+    cp settings.json $RELEASE_DIR/
+    echo -e "${GREEN}✓ settings.json 已复制${NC}"
+else
+    echo -e "${YELLOW}! 警告: 未找到 settings.json${NC}"
+fi
+
 # 6. 生成跨平台运行脚本
 echo -e "\n${YELLOW}[6/6] 生成管理脚本...${NC}"
 
