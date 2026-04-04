@@ -1,3 +1,6 @@
+#define CROW_ENABLE_ASIO
+#define ASIO_STANDALONE
+
 #include <crow_all.h>
 #include <sys/epoll.h>
 #include <atomic>
@@ -684,437 +687,48 @@ private:
     void setup_routes() {
     CROW_ROUTE(app_, "/")
 ([this]() {
-    std::string html = R"rawhtml(
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <title>Rakuraku Music Station</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-            color: #333;
-        }
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(10px);
-        }
-        header {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-        h1 {
-            font-size: 3em;
-            color: #764ba2;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-        }
-        h1 .icon { font-size: 1.2em; }
-        .subtitle {
-            color: #666;
-            font-size: 1.2em;
-            margin-bottom: 30px;
-        }
-        .player-section {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
-            border: 1px solid #e9ecef;
-        }
-        .player-section h2 {
-            color: #495057;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        audio {
-            width: 100%;
-            margin-bottom: 20px;
-            border-radius: 10px;
-        }
-        .controls {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1em;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        button:active {
-            transform: translateY(0);
-        }
-        #currentTrack {
-            font-size: 1.2em;
-            color: #495057;
-            font-weight: 600;
-            background: white;
-            padding: 10px 20px;
-            border-radius: 8px;
-            flex-grow: 1;
-            border: 2px solid #e9ecef;
-        }
-        .playlist-section {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
-            border: 1px solid #e9ecef;
-        }
-        .playlist-section h2 {
-            color: #495057;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        #playlist {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 12px;
-            max-height: 400px;
-            overflow-y: auto;
-            padding-right: 10px;
-        }
-        .track {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            border-left: 4px solid transparent;
-        }
-        .track:hover {
-            background: #e9ecef;
-            transform: translateX(5px);
-        }
-        .track.current {
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-            border-left-color: #667eea;
-        }
-        .track-number {
-            display: inline-block;
-            width: 25px;
-            text-align: center;
-            background: #667eea;
-            color: white;
-            border-radius: 4px;
-            margin-right: 10px;
-            font-size: 0.9em;
-            padding: 2px 5px;
-        }
-        .upload-section {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 25px;
-            border: 1px solid #e9ecef;
-        }
-        .upload-section h2 {
-            color: #495057;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        #uploadForm {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        input[type="file"] {
-            flex-grow: 1;
-            padding: 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 1em;
-            background: white;
-        }
-        #uploadStatus {
-            margin-top: 15px;
-            padding: 12px;
-            border-radius: 8px;
-            font-weight: 600;
-            text-align: center;
-        }
-        .success { background: #d4edda; color: #155724; }
-        .error { background: #f8d7da; color: #721c24; }
-        .info { background: #d1ecf1; color: #0c5460; }
-        .stats {
-            display: flex;
-            gap: 20px;
-            margin-top: 30px;
-            flex-wrap: wrap;
-        }
-        .stat-box {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            flex: 1;
-            min-width: 200px;
-            border: 1px solid #e9ecef;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 2.5em;
-            font-weight: bold;
-            color: #667eea;
-            margin: 10px 0;
-        }
-        .stat-label {
-            color: #6c757d;
-            font-size: 0.9em;
-        }
-        footer {
-            text-align: center;
-            margin-top: 40px;
-            color: #6c757d;
-            font-size: 0.9em;
-            padding-top: 20px;
-            border-top: 1px solid #e9ecef;
-        }
-        @media (max-width: 768px) {
-            .container { padding: 15px; }
-            h1 { font-size: 2em; }
-            .controls { flex-direction: column; }
-            #playlist { grid-template-columns: 1fr; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1><span class="icon">🎵</span> Rakuraku Music Station</h1>
-            <div class="subtitle">咕咕嘎嘎</div>
-        </header>
-        
-        <section class="player-section">
-            <h2><span class="icon">▶️</span> 当前播放</h2>
-            <audio id="player" controls autoplay>
-    <source src="http://localhost:2241" type="audio/mpeg">
-</audio>
-            <div class="controls">
-                <button onclick="playNext()">⏭️ 下一首</button>
-                <div id="currentTrack">正在加载播放列表...</div>
-            </div>
-        </section>
-        
-        <section class="playlist-section">
-            <h2><span class="icon">📋</span> 播放列表 (<span id="trackCount">0</span> 首歌曲)</h2>
-            <div id="playlist">加载中...</div>
-        </section>
-        
-        <section class="upload-section">
-            <h2><span class="icon">📤</span> 上传音乐</h2>
-            <form id="uploadForm">
-                <input type="file" id="fileInput" name="file" accept=".mp3,.wav,.flac,.ogg,.m4a,.aac" required>
-                <button type="submit">⬆️ 上传</button>
-            </form>
-            <div id="uploadStatus"></div>
-        </section>
-        
-        <div class="stats">
-            <div class="stat-box"><div class="stat-label">在线听众</div><div class="stat-value" id="clientCount">0</div></div>
-            <div class="stat-box"><div class="stat-label">总曲目</div><div class="stat-value" id="totalTracks">0</div></div>
-            <div class="stat-box"><div class="stat-label">当前曲目</div><div class="stat-value" id="currentIndex">-</div></div>
-        </div>
-        
-        <footer>
-            <p>© Rakuraku music station | 端口: 2240 (Web), 2241 (Stream)</p>
-        </footer>
-    </div>
-
-    <script>
-        // 动态注入音频源（修复）
-        document.addEventListener("DOMContentLoaded", () => {
-            document.getElementById("player").src = "http://localhost:2241";
-        });
-        
-        // 加载播放列表
-        async function loadPlaylist() {
-            try {
-                const response = await fetch('/api/playlist');
-                const data = await response.json();
-                
-                const playlist = data.playlist || [];
-                const currentIndex = data.current || 0;
-                
-                currentTrackIndex = currentIndex % (playlist.length || 1);
-                totalTracks = playlist.length;
-                
-                // 更新UI
-                document.getElementById('currentTrack').textContent = 
-                    playlist.length > 0 ? `正在播放: ${playlist[currentTrackIndex]}` : '播放列表为空';
-                document.getElementById('trackCount').textContent = totalTracks;
-                document.getElementById('totalTracks').textContent = totalTracks;
-                document.getElementById('currentIndex').textContent = playlist.length > 0 ? currentTrackIndex + 1 : '-';
-                
-                // 生成播放列表HTML
-                let html = '';
-                if (playlist.length === 0) {
-                    html = '<div style="text-align: center; padding: 40px; color: #6c757d;">'
-                         + '<div style="font-size: 3em; margin-bottom: 20px;">🎵</div>'
-                         + '<div>播放列表为空，请上传音乐文件</div>'
-                         + '</div>';
-                } else {
-                    playlist.forEach((track, index) => {
-                        const isCurrent = index === currentTrackIndex;
-                        html += `
-                            <div class="track ${isCurrent ? 'current' : ''}" onclick="playTrack(${index})>
-                                <span class="track-number">${index + 1}</span>
-                                ${track}
-                                ${isCurrent ? ' <span style="color: #667eea;">▶️</span>' : ''}
-                            </div>
-                        `;
-                    });
-                }
-                document.getElementById('playlist').innerHTML = html;
-                
-            } catch (error) {
-                console.error('加载播放列表失败:', error);
-                document.getElementById('currentTrack').textContent = '加载失败，请刷新页面';
-            }
-        }
-        
-        // 加载统计信息
-        async function loadStats() {
-            try {
-                const response = await fetch('/api/stats');
-                const data = await response.json();
-                document.getElementById('clientCount').textContent = data.clients || 0;
-            } catch (error) {
-                console.error('加载统计失败:', error);
-            }
-        }
-        
-        // 播放指定曲目
-        async function playTrack(index) {
-            try {
-                await fetch('/api/play/' + index);
-                await new Promise(resolve => setTimeout(resolve, 500)); // 等待切换
-                loadPlaylist();
-                document.getElementById('player').load(); // 重新加载音频流
-            } catch (error) {
-                console.error('切换曲目失败:', error);
-                showMessage('切换曲目失败: ' + error.message, 'error');
-            }
-        }
-        
-        // 播放下一首
-        async function playNext() {
-            try {
-                await fetch('/api/next');
-                await new Promise(resolve => setTimeout(resolve, 500));
-                loadPlaylist();
-                document.getElementById('player').load();
-            } catch (error) {
-                console.error('下一首失败:', error);
-                showMessage('切换失败: ' + error.message, 'error');
-            }
-        }
-        
-        // 显示消息
-        function showMessage(message, type = 'info') {
-            const statusEl = document.getElementById('uploadStatus');
-            statusEl.textContent = message;
-            statusEl.className = type;
-            if (type !== 'info') {
-                setTimeout(() => {
-                    statusEl.textContent = '';
-                    statusEl.className = '';
-                }, 5000);
-            }
-        }
-        
-        // 处理文件上传
-        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const fileInput = document.getElementById('fileInput');
-            if (!fileInput.files[0]) {
-                showMessage('请选择要上传的文件', 'error');
-                return;
-            }
-            
-            const file = fileInput.files[0];
-            const maxSize = 50 * 1024 * 1024; // 50MB
-            
-            if (file.size > maxSize) {
-                showMessage('文件太大，最大支持50MB', 'error');
-                return;
-            }
-            
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            showMessage('上传中...', 'info');
-            
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (response.ok) {
-                    const text = await response.text();
-                    showMessage('✅ ' + text, 'success');
-                    fileInput.value = '';
-                    setTimeout(() => {
-                        loadPlaylist();
-                    }, 1000);
-                } else {
-                    const text = await response.text();
-                    showMessage('❌ ' + text, 'error');
-                }
-            } catch (error) {
-                showMessage('❌ 上传失败: ' + error.message, 'error');
-            }
-        });
-        
-        // 初始化加载
-        loadPlaylist();
-        loadStats();
-        
-        // 定期更新
-        setInterval(loadPlaylist, 3000);
-        setInterval(loadStats, 2000);
-    </script>
-</body>
-</html>
-)rawhtml"; // 结束定界符也要匹配
-        return crow::response(html);
-    });
-    
-        // API: 播放列表
+    std::ifstream file("web/index.html");
+    if (!file.is_open()) {
+        return crow::response(404, "index.html not found");
+    }
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    crow::response res(buffer.str());
+    res.set_header("Content-Type", "text/html; charset=utf-8");
+    return res;
+});
+		
+	// 提供 CSS 文件
+	CROW_ROUTE(app_, "/css/<string>")
+	([this](const std::string& filename) {
+	    std::string filepath = "web/css/" + filename;
+	    std::ifstream file(filepath, std::ios::binary);
+	    if (!file.is_open()) {
+	        return crow::response(404, "CSS file not found");
+	    }
+	    std::stringstream buffer;
+	    buffer << file.rdbuf();
+	    crow::response res(buffer.str());
+	    res.set_header("Content-Type", "text/css");
+	    return res;
+	});
+	
+	// 提供 JS 文件
+	CROW_ROUTE(app_, "/js/<string>")
+	([this](const std::string& filename) {
+	    std::string filepath = "web/js/" + filename;
+	    std::ifstream file(filepath, std::ios::binary);
+	    if (!file.is_open()) {
+	        return crow::response(404, "JS file not found");
+	    }
+	    std::stringstream buffer;
+	    buffer << file.rdbuf();
+	    crow::response res(buffer.str());
+	    res.set_header("Content-Type", "application/javascript");
+	    return res;
+	});
+	
+	// API: 播放列表
         CROW_ROUTE(app_, "/api/playlist")
         ([this]() {
             std::lock_guard<std::mutex> lock(*playlist_mutex_);
