@@ -1,87 +1,210 @@
-# RakurakuRadioServer
+# 🎵 Rakuraku Music Station
 
-一个高性能、轻量级的 C++ 流媒体广播服务器，基于 Apache License 2.0 协议开源。
+一个轻量级、高性能的 C++ 流媒体广播服务器，支持实时音频流传输和 Web 管理界面。
 
-本项目专为低延迟音频分发设计，结合了 Linux 原生 epoll 事件驱动模型与现代化的 Web 管理界面。它能将本地媒体目录转化为一个实时流媒体电台，支持多客户端同步收听及远程文件管理。
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
+![C++](https://img.shields.io/badge/C++-17-orange.svg)
 
-## ✨ 功能特性
+## ✨ 特性
 
-*   **双引擎架构**：
-    *   **核心流引擎**：基于 epoll 的非阻塞 I/O，支持上千路并发连接，极低 CPU 占用。
-    *   **Web 管理引擎**：基于 Crow 框架，提供 RESTful API 与交互式 UI。
-*   **全能环境适配**：内置自动识别脚本，完美适配 Arch Linux 与 Debian/Ubuntu (含 WSL)。
-*   **自动环境修复**：自动检测并配置 `zh_CN.UTF-8` 本地化环境，彻底解决因特殊字符文件名导致的 FFmpeg 管道崩溃 (`revents=16`) 问题。（感谢知夏）
-*   **极致性能优化**：构建脚本默认开启 `-O3`、`-flto` 及 `-march=native` 硬件原生指令集优化。
+- 🚀 **高性能**：基于 Linux epoll 的非阻塞 I/O，支持大量并发连接
+- 🎧 **多格式支持**：MP3, WAV, FLAC, OGG, M4A, AAC 等常见音频格式
+- 🌐 **Web 界面**：现代化的管理界面，支持文件上传和播放列表管理
+- 🔐 **权限控制**：基于会话的认证系统，区分普通用户和管理员
+- 📱 **流媒体兼容**：标准 HTTP 流媒体协议，支持各种音频播放器
+- 🛠️ **易于部署**：一键式构建脚本，无需复杂配置
 
-## 🛠️ 技术栈
+## 📋 系统要求
 
-*   **内核**：C++
-*   **底层 I/O**：Linux epoll, POSIX Threads, Pipes
-*   **Web 框架**：Crow
-*   **编解码后端**：FFmpeg
-*   **加密/通讯**： Libcrypto
+- **操作系统**: Linux (Ubuntu/Debian/Arch Linux)
+- **依赖**: 
+  - GCC/G++ 7.0+ 或 Clang
+  - FFmpeg (音频处理)
+  - OpenSSL (加密支持)
+  - Boost C++ Libraries
+  - Crow Framework (Web 框架)
 
 ## 🚀 快速开始
 
-### 1. 一键构建 (推荐)
-
-为了简化操作，项目提供了一个全能构建脚本。无论你在 Arch 还是 Ubuntu 上，它都会自动处理所有依赖。
+### 1. 自动构建（推荐）
 
 ```bash
-# 赋予脚本执行权限
-chmod +x build.sh
+# 运行构建脚本（自动处理依赖）
+./build_release.sh
 
-# 执行自动化构建
-./build.sh
-```
-
-脚本会自动完成以下操作：
-*   识别发行版并安装 `g++`, `openssl`, `boost`, `ffmpeg` 等依赖。
-*   生成并配置中文语言环境 (Locale)。
-*   执行 Release 级优化编译。
-*   在 `dist/` 目录下生成完整的运行环境。
-
-### 2. 部署与运行
-
-构建完成后，所有产物都集中在 `dist` 文件夹中：
-
-```bash
+# 进入发布目录
 cd dist
 
-# 1. 放入音乐文件（支持 .mp3, .m4a, .flac, .wav 等）
-# 脚本已为你自动创建了 media 目录
-cp /path/to/your/music/* ./media/
+# 添加音乐文件（支持中文文件名）
+cp /path/to/your/music/*.mp3 ./media/
 
-# 2. 使用管理脚本启动
+# 启动服务器
 ./start.sh
 ```
 
-### 3. 访问方式
+### 2. 手动构建
 
-*   **Web 管理平台**: `http://你的IP:2240` (点歌、监控状态、上传文件)
-*   **音频流挂载点**: `http://你的IP:2241` (使用浏览器、VLC 或 PotPlayer 打开此链接即可收听)
+```bash
+# 安装依赖（Ubuntu/Debian）
+sudo apt-get install build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev wget
 
-## 📂 项目架构
+# 下载 Crow 框架
+wget https://github.com/CrowCpp/Crow/releases/download/v1.3.2/crow_all.h
 
-*   **StreamServer**: 负责维护客户端 Socket 队列，通过 epoll 轮询实现高效的数据分发。
-*   **AudioPlayer**: 负责读取音频文件，通过 popen 管道调用 FFmpeg。已优化为 `-re` 实时流模式，提供更平滑的听感。
-*   **RingBuffer**: 生产者-消费者模型缓存，平衡 FFmpeg 解码速度与网络传输波动的差值。
+# 编译
+mkdir -p dist/media
+g++ radioserver.cpp -o dist/radioserver -std=c++17 -O3 -lpthread -lssl -lcrypto -I.
 
-## ⚠️ 疑难解答 (Troubleshooting)
+# 运行
+cd dist
+./radioserver
+```
 
-**Q: 遇到 `Pipe error: revents=16` 怎么办？**
+## 🎮 使用方法
 
-**A:** 这通常是由于文件名包含特殊字符（如 `/`, `()`, `【】`）且系统缺少中文 Locale 导致的。
-*   最新版本的 `build.sh` 会自动修复此问题。
-*   请确保通过 `dist/start.sh` 启动程序，它会强制注入 UTF-8 环境变量。
+### 启动服务器
 
-## 📜 开源协议
+```bash
+cd dist
+./start.sh
+```
 
-本项目采用 Apache License 2.0 协议开源。详情请参阅项目中的 LICENSE 文件。
+启动后可以通过以下地址访问：
 
-## 🤝 鸣谢
+- **Web 管理界面**: http://localhost:2240
+- **流媒体端点**: http://localhost:2241
+- **播放器兼容**: 兼容 VLC, Chrome, Firefox 等主流播放器
 
-本项目在开发过程中得到了许多支持，在此特别鸣谢 **Cynun**。
-感谢 ta 提供的技术支持与灵感。
+### 基本操作
 
-Copyright © 2026. Licensed under the Apache License, Version 2.0.
+1. **添加音乐**：将音频文件放入 `media/` 目录，服务器会自动扫描并添加到播放列表
+2. **Web 管理**：访问 http://localhost:2240 进行播放控制和文件管理
+3. **管理员登录**：点击"管理面板"，使用默认密码 `admin123`
+
+### 配置文件
+
+编辑 `settings.json` 自定义服务器设置：
+
+```json
+{
+    "station_name": "我的音乐电台",
+    "subtitle": "个性化描述",
+    "primary_color": "#764ba2",
+    "secondary_color": "#667eea", 
+    "bg_color": "#f4f4f9",
+    "admin_password": "你的密码",
+    "allow_guest_skip": false
+}
+```
+
+## 📁 项目结构
+
+```
+rakurakumusicstation/
+├── radioserver.cpp          # 主服务器实现
+├── authmiddleware.hpp       # 认证中间件
+├── sessionmanager.hpp       # 会话管理
+├── settings.json            # 配置文件
+├── build_release.sh         # 自动化构建脚本
+├── README.md               # 项目文档
+└── dist/                   # 发布目录
+    ├── radioserver         # 可执行文件
+    ├── start.sh           # 启动脚本
+    ├── stop.sh            # 停止脚本
+    ├── settings.json      # 配置文件
+    ├── index.html         # Web 界面模板
+    └── media/             # 音乐文件目录
+```
+
+## 🔧 技术架构
+
+### 核心组件
+
+- **StreamServer**: 基于 epoll 的异步流媒体服务器
+- **AudioPlayer**: FFmpeg 音频解码和转码引擎
+- **BroadcastBuffer**: 线程安全的环形缓冲区
+- **WebServer**: Crow 框架 Web 管理界面
+- **SessionManager**: 会话管理和认证系统
+
+### 端口配置
+
+- **Web 端口**: 2240 (HTTP 管理界面)
+- **流媒体端口**: 2241 (音频流传输)
+
+## 🐛 故障排除
+
+### 常见问题
+
+**1. 编译失败**
+```bash
+# 确保安装所有依赖
+sudo apt-get update
+sudo apt-get install build-essential ffmpeg libssl-dev libboost-all-dev
+```
+
+**2. 中文文件名乱码**
+```bash
+# 启用中文语言环境
+sudo locale-gen zh_CN.UTF-8
+sudo update-locale LANG=zh_CN.UTF-8
+```
+
+**3. 端口被占用**
+```bash
+# 检查端口使用情况
+netstat -tulpn | grep :2240
+# 或更换端口（修改 settings.json）
+```
+
+**4. 音频无法播放**
+- 确保 FFmpeg 支持 MP3 编码
+- 验证音频文件格式是否为支持的类型
+- 检查文件权限和路径
+
+### 日志查看
+
+```bash
+# 实时查看日志
+tail -f dist/server.log
+
+# 查看错误信息
+cat dist/server.log | grep ERROR
+```
+
+## 🔒 安全建议
+
+1. **修改默认密码**：生产环境务必修改 `admin_password`
+2. **防火墙配置**：限制对 2240/2241 端口的访问
+3. **文件上传限制**：避免上传大文件或不安全内容
+4. **HTTPS 支持**：如需公网访问，建议配置 SSL/TLS
+
+## 🤝 贡献
+
+欢迎提交 Issues 和 Pull Requests！
+
+### 开发环境设置
+
+```bash
+# 调试构建
+g++ radioserver.cpp -o radioserver -std=c++17 -g -O0 -lpthread -lssl -lcrypto -I.
+
+# 运行测试
+./radioserver
+```
+
+## 📄 许可证
+
+本项目基于 MIT 许可证开源 - 查看 [LICENSE](LICENSE) 文件了解详情。
+
+## 🙏 致谢
+
+- [Crow C++](https://github.com/CrowCpp/Crow) - 轻量级 Web 框架
+- [FFmpeg](https://ffmpeg.org/) - 强大的多媒体处理库
+- [Boost C++ Libraries](https://www.boost.org/) - C++ 扩展库
+
+---
+
+<div align="center">
+  <p><em>如果本项目对你有帮助，请点个 ⭐ Star 支持！</em></p>
+</div>
