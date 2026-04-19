@@ -1,41 +1,33 @@
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
+# 编译输出和分发目录
+dist/
+radioserver
 *.o
-*.obj
+*.d
+*.so
+*.a
 
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
+# 依赖和第三方库
+crow_all.h
+*.dll
+*.lib
 *.pdb
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# IDE和编辑器文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Fortran module files
-*.mod
-*.smod
+# 项目配置和文档
+CLAUDE.md
+.DS_Store
+Thumbs.db
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
+# 媒体文件目录
+media/
 
-# Executables
-*.exe
-*.out
-*.app
-
-# debug information files
-*.dwo
+# 会话和临时文件
+*.tmp
+*.temp
+*.log
