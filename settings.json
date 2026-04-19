@@ -3,5 +3,7 @@
     "subtitle": "咕咕嘎嘎",
     "primary_color": "#764ba2",
     "secondary_color": "#667eea",
-    "bg_color": "#f4f4f9"
+    "bg_color": "#f4f4f9",
+    "admin_password": "your_password_here",
+    "allow_guest_skip": false
 }

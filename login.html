@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>{{STATION_NAME}} - 管理员登录</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, {{PRIMARY_COLOR}} 0%, {{SECONDARY_COLOR}} 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo h1 {
+            font-size: 2.2em;
+            color: {{PRIMARY_COLOR}};
+            margin-bottom: 10px;
+        }
+        .logo p {
+            color: #666;
+            font-size: 1em;
+        }
+        .form-group {
+            margin-bottom: 25px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+        input[type="password"] {
+            width: 100%;
+            padding: 12px 15px;
+            font-size: 1em;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input[type="password"]:focus {
+            border-color: {{PRIMARY_COLOR}};
+        }
+        .login-button {
+            width: 100%;
+            background: {{PRIMARY_COLOR}};
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .login-button:hover {
+            background: {{SECONDARY_COLOR}};
+            transform: translateY(-2px);
+        }
+        .error-message {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8d7da;
+            color: #721c24;
+            border-radius: 5px;
+            text-align: center;
+            display: none;
+        }
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .back-link a {
+            color: #6c757d;
+            text-decoration: none;
+        }
+        .back-link a:hover {
+            text-decoration: underline;
+            color: {{SECONDARY_COLOR}};
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <h1>{{STATION_NAME}}</h1>
+            <p>{{SUBTITLE}}</p>
+            <p style="margin-top: 10px; color: #495057;">管理员登录</p>
+        </div>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" id="password" placeholder="请输入管理员密码" required>
+            </div>
+            
+            <button type="submit" class="login-button">登录</button>
+            
+            <div id="errorMessage" class="error-message"></div>
+        </form>
+        
+        <div class="back-link">
+            <a href="/">← 返回主页</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const password = document.getElementById('password').value.trim();
+            const errorElement = document.getElementById('errorMessage');
+            
+            if (!password) {
+                errorElement.textContent = "请输入密码";
+                errorElement.style.display = "block";
+                return;
+            }
+            
+            try {
+                const response = await fetch('/admin/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password: password })
+                });
+                
+                if (response.ok) {
+                    // 登录成功，跳转到管理面板
+                    window.location.href = '/';
+                } else {
+                    const errorText = await response.text();
+                    errorElement.textContent = errorText;
+                    errorElement.style.display = "block";
+                }
+            } catch (error) {
+                errorElement.textContent = "登录请求失败";
+                errorElement.style.display = "block";
+            }
+        });
+    </script>
+</body>
+</html>

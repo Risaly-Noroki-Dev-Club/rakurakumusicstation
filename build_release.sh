@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =============================================================================
-# Rakuraku Music Station - 超智能自动化构建脚本 v6.0 
+# Rakuraku Music Station - Build Script v2.0
 # =============================================================================
 
 set -e
@@ -11,146 +11,240 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-NC='\033[0m' 
+NC='\033[0m'
 
-echo -e "${BLUE}====================================================${NC}"
-echo -e "${BLUE}     Rakuraku Music Station - Universal Builder     ${NC}"
-echo -e "${BLUE}====================================================${NC}\n"
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
 
-# 1. 系统环境识别
-echo -e "${YELLOW}[1/6] 正在识别系统环境...${NC}"
+print_warning() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+echo -e "${BLUE}
+══════════════════════════════════════════════
+    Rakuraku Music Station 构建工具
+══════════════════════════════════════════════${NC}
+"
+
+# 1. 检查系统环境
+print_status "检测系统环境..."
 if [ -f /etc/arch-release ]; then
-    OS="Arch"
+    OS="Arch Linux"
     PKG_MGR="pacman"
     INSTALL_CMD="sudo pacman -S --needed --noconfirm"
-    DEPS="base-devel ffmpeg openssl boost cmake wget asio"
-    echo -e "${GREEN}检测到系统类型: Arch Linux${NC}"
+    DEPENDENCIES="base-devel ffmpeg openssl boost cmake wget asio"
 elif [ -f /etc/debian_version ] || [ -f /etc/lsb-release ]; then
-    OS="Debian"
+    OS="Debian/Ubuntu"
     PKG_MGR="apt"
     INSTALL_CMD="sudo apt-get install -y"
-    DEPS="build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev locales wget libasio-dev"
-    echo -e "${GREEN}检测到系统类型: Debian/Ubuntu/WSL${NC}"
+    DEPENDENCIES="build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev locales wget libasio-dev"
 else
-    echo -e "${RED}抱歉，暂不支持此发行版。脚本仅支持 Arch 或 Debian/Ubuntu 系列。${NC}"
+    print_error "不支持的操作系统。仅支持 Arch Linux 和 Debian/Ubuntu 系列"
     exit 1
 fi
 
-# 2. 自动化安装依赖
-echo -e "\n${YELLOW}[2/6] 正在同步系统依赖...${NC}"
-if [ "$PKG_MGR" == "apt" ]; then sudo apt-get update; fi
-if [ ! -f "crow_all.h" ]; then echo -e "${PURPLE}正在下载 Crow 框架核心组件...${NC}"
-wget -q https://github.com/CrowCpp/Crow/releases/download/v1.3.2/crow_all.h
-    echo -e "${GREEN}✓ Crow 已就绪${NC}"
-fi
-$INSTALL_CMD $DEPS
+print_success "检测到系统: $OS"
 
-# 3. 强制修复 Locale 
-echo -e "\n${YELLOW}[3/6] 检查并修复中文语言环境...${NC}"
-if ! locale -a | grep -qi "zh_CN.utf8"; then
-    echo -e "${PURPLE}正在激活 zh_CN.UTF-8 以支持中文文件名...${NC}"
-    if [ "$OS" == "Arch" ]; then
-        sudo sed -i '/^#zh_CN.UTF-8 UTF-8/s/^#//' /etc/locale.gen
-        sudo locale-gen
+# 2. 检查并安装依赖
+print_status "检查系统依赖..."
+if [ "$PKG_MGR" == "apt" ]; then
+    sudo apt-get update > /dev/null 2>&1
+fi
+
+# 检查 Crow 框架
+if [ ! -f "crow_all.h" ]; then
+    print_status "下载 Crow 框架..."
+    wget -q https://github.com/CrowCpp/Crow/releases/download/v1.3.2/crow_all.h
+    if [ $? -eq 0 ]; then
+        print_success "Crow 框架下载完成"
     else
-        sudo locale-gen zh_CN.UTF-8
-        sudo update-locale LANG=zh_CN.UTF-8
+        print_error "Crow 框架下载失败"
+        exit 1
     fi
-    echo -e "${GREEN}✓ Locale 已修复${NC}"
 else
-    echo -e "${GREEN}✓ 中文环境已就绪${NC}"
+    print_success "Crow 框架已存在"
 fi
 
-# 4. FFmpeg
-echo -e "\n${YELLOW}[4/6] 校验 FFmpeg 解码能力...${NC}"
-if ffmpeg -encoders | grep -q "libmp3lame"; then
-    echo -e "${GREEN}✓ FFmpeg已就绪 (支持 libmp3lame)${NC}"
+# 安装系统依赖
+print_status "安装系统依赖包..."
+$INSTALL_CMD $DEPENDENCIES > /dev/null 2>&1
+
+# 3. 设置中文环境（可选）
+print_status "检查语言环境支持..."
+if ! locale -a | grep -qi "zh_CN.utf8"; then
+    print_warning "中文语言环境未启用，但不影响基础功能"
 else
-    echo -e "${RED}! 警告: 即使安装后仍缺少 libmp3lame，正在尝试下载静态全量包...${NC}"
-    wget -N https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
-    mkdir -p ffmpeg_tmp && tar -xJf ffmpeg-release-*-static.tar.xz -C ffmpeg_tmp --strip-components=1
-    sudo cp ffmpeg_tmp/ffmpeg /usr/local/bin/ffmpeg
-    echo -e "${GREEN}✓ 静态全量版 FFmpeg 已部署${NC}"
+    print_success "中文环境支持已启用"
 fi
 
-# 5. 编译
-echo -e "\n${YELLOW}[5/6] 编译服务器核心...${NC}"
+# 4. 验证 FFmpeg
+print_status "检查 FFmpeg 支持..."
+if command -v ffmpeg > /dev/null 2>&1; then
+    if ffmpeg -encoders | grep -q "libmp3lame"; then
+        print_success "FFmpeg 支持 MP3 编码"
+    else
+        print_warning "FFmpeg 缺少 MP3 编码支持，将影响音频转码"
+    fi
+else
+    print_error "FFmpeg 未找到，请确保已正确安装"
+    exit 1
+fi
+
+# 5. 编译项目
+print_status "编译服务器程序..."
 RELEASE_DIR="dist"
-rm -rf $RELEASE_DIR && mkdir -p $RELEASE_DIR/media
+rm -rf $RELEASE_DIR
+mkdir -p $RELEASE_DIR/media
+mkdir -p $RELEASE_DIR/templates
 
-# 针对 CPU 进行原生优化 (-march=native)
-g++ radioserver.cpp -o $RELEASE_DIR/radioserver -std=c++17 -O3 -flto -march=native -lpthread -lssl -lcrypto -I. -w
+# 编译参数
+CXXFLAGS="-std=c++17 -O3 -flto -march=native -lpthread -lssl -lcrypto -I. -w"
+
+g++ radioserver.cpp -o $RELEASE_DIR/radioserver $CXXFLAGS
 
 if [ -f "$RELEASE_DIR/radioserver" ]; then
-    # 移除调试符号以减小体积
-    if command -v strip &> /dev/null; then strip $RELEASE_DIR/radioserver; fi
-    echo -e "${GREEN}✓ 编译成功!${NC}"
+    # 可选：移除调试符号减小体积
+    if command -v strip > /dev/null 2>&1; then
+        strip $RELEASE_DIR/radioserver
+    fi
+    print_success "编译成功"
 else
-    echo -e "${RED}✗ 编译失败，请检查 C++ 源代码。${NC}"
+    print_error "编译失败"
     exit 1
 fi
 
-# 【新增】复制前端文件和配置文件到发布目录
-echo -e "\n${YELLOW}[5.5/6] 复制前端资源...${NC}"
+# 6. 复制配置文件
+print_status "准备运行环境..."
+
+# 基础模板文件
 if [ -f "index.html" ]; then
     cp index.html $RELEASE_DIR/
-    echo -e "${GREEN}✓ index.html 已复制${NC}"
 else
-    echo -e "${YELLOW}! 警告: 未找到 index.html${NC}"
+    # 创建基础模板
+    cat > $RELEASE_DIR/index.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rakuraku Music Station</title>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .player { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        button { padding: 10px 20px; margin: 5px; background: #764ba2; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🎵 Rakuraku Music Station</h1>
+    <div class="player">
+        <p>当前正在播放的音乐电台</p>
+        <audio id="audioPlayer" controls style="width: 100%;">
+            <source src="http://localhost:2241" type="audio/mpeg">
+        </audio>
+        <div>
+            <button onclick="document.getElementById('audioPlayer').play()">播放</button>
+            <button onclick="document.getElementById('audioPlayer').pause()">暂停</button>
+            <button onclick="window.location.href='/admin'">管理面板</button>
+        </div>
+    </div>
+    <p>将音频文件放入 media/ 目录即可自动播放</p>
+</body>
+</html>
+EOF
 fi
 
+# 配置文件和脚本
 if [ -f "settings.json" ]; then
     cp settings.json $RELEASE_DIR/
-    echo -e "${GREEN}✓ settings.json 已复制${NC}"
 else
-    echo -e "${YELLOW}! 警告: 未找到 settings.json${NC}"
+    cp > $RELEASE_DIR/settings.json << 'EOF'
+{
+    "station_name": "Rakuraku Music Station",
+    "subtitle": "轻量级流媒体服务器",
+    "primary_color": "#764ba2",
+    "secondary_color": "#667eea",
+    "bg_color": "#f4f4f9",
+    "admin_password": "admin123",
+    "allow_guest_skip": false
+}
+EOF
 fi
 
-# 6. 生成跨平台运行脚本
-echo -e "\n${YELLOW}[6/6] 生成管理脚本...${NC}"
-
-cat <<'EOF' > $RELEASE_DIR/start.sh
+# 创建启动脚本
+cat > $RELEASE_DIR/start.sh << 'EOF'
 #!/bin/bash
-# 强制环境为 UTF-8，防止 FFmpeg 在读取特殊字符文件名时崩溃
-export LANG=zh_CN.UTF-8
-export LC_ALL=zh_CN.UTF-8
-export PATH=/usr/local/bin:$PATH
 
+# 设置中文环境支持
+if locale -a | grep -qi "zh_CN.utf8"; then
+    export LANG=zh_CN.UTF-8
+    export LC_ALL=zh_CN.UTF-8
+fi
+
+# 确保媒体目录存在
 mkdir -p media
-echo "=== Rakuraku Music Station ==="
-echo "正在启动，请确保音乐已放入 media/ 目录"
-echo "Web 控制台: http://localhost:2240"
 
-# 后台运行并记录日志
+echo "🎵 Rakuraku Music Station 启动中..."
+echo "========================================"
+echo "Web 界面: http://localhost:2240"
+echo "流媒体: http://localhost:2241"
+echo "========================================"
+echo "音乐文件请放置在 media/ 目录"
+echo ""
+
+# 后台运行服务器
 nohup ./radioserver > server.log 2>&1 &
 echo $! > .server.pid
-echo "服务已运行，PID: $(cat .server.pid)"
-echo "查看运行情况: tail -f server.log"
+
+echo "✅ 服务器已启动 (PID: $(cat .server.pid))"
+echo "📄 查看日志: tail -f server.log"
+echo "🛑 停止服务: ./stop.sh"
 EOF
 
-cat <<'EOF' > $RELEASE_DIR/stop.sh
+# 创建停止脚本
+cat > $RELEASE_DIR/stop.sh << 'EOF'
 #!/bin/bash
+
 if [ -f .server.pid ]; then
     PID=$(cat .server.pid)
-    kill $PID && rm .server.pid
-    echo "服务已停止 (PID: $PID)"
+    if ps -p $PID > /dev/null 2>&1; then
+        kill $PID
+        rm .server.pid
+        echo "✅ 服务器已停止 (PID: $PID)"
+    else
+        echo "⚠️  PID 文件存在但进程未运行，清理中..."
+        rm .server.pid
+    fi
 else
-    pkill radioserver
-    echo "已尝试停止所有 radioserver 进程"
+    # 如果没有 PID 文件，尝试杀死所有 radioserver 进程
+    if pkill radioserver 2>/dev/null; then
+        echo "✅ 已停止所有 radioserver 进程"
+    else
+        echo "ℹ️ 没有运行中的 radioserver 进程"
+    fi
 fi
 EOF
 
-chmod +x $RELEASE_DIR/*.sh
-echo -e "${GREEN}✓ 管理脚本 (start/stop) 已生成${NC}"
+chmod +x $RELEASE_DIR/start.sh $RELEASE_DIR/stop.sh
 
-# 完成总结
-echo -e "\n${BLUE}====================================================${NC}"
-echo -e "${GREEN}        构建大成功！ (Target: $OS)${NC}"
-echo -e "${BLUE}====================================================${NC}"
-echo -e "${YELLOW}运行指南:${NC}"
-echo -e " 1. cd $RELEASE_DIR"
-echo -e " 2. 把你的音乐放到 ./media 文件夹里"
-echo -e " 3. 执行 ./start.sh"
-echo -e " 4. 浏览器访问你的服务器 IP:2240"
-echo -e "${BLUE}====================================================${NC}\n"
+# 7. 完成提示
+print_success "构建完成！"
+echo -e "${BLUE}
+使用方法:
+══════════════════════════════════════════════${NC}"
+echo "1. 进入目录: cd $RELEASE_DIR"
+echo "2. 添加音乐: 将音频文件放入 media/ 目录"
+echo "3. 启动服务: ./start.sh"
+echo "4. 访问地址: http://localhost:2240"
+echo ""
+echo "支持格式: MP3, WAV, FLAC, OGG, M4A, AAC"
+echo "管理员密码: admin123 (可在 settings.json 中修改)"
+echo ""
+echo -e "${GREEN}🎵 享受音乐时光！${NC}"

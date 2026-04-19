@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>{{STATION_NAME}} - 管理面板</title>
+    <style>
+        /* 接收后端传来的自定义颜色变量 */
+        :root {
+            --primary-color: {{PRIMARY_COLOR}};
+            --secondary-color: {{SECONDARY_COLOR}};
+            --bg-gradient: {{BG_COLOR}};
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: var(--bg-color);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .header-left h1 {
+            font-size: 2.2em;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+        .header-left p {
+            color: #666;
+        }
+        .admin-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .admin-badge {
+            background: var(--primary-color);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+        .logout-button {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+        .logout-button:hover {
+            background: #c0392b;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .card h2 {
+            color: #495057;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: var(--secondary-color);
+            margin: 10px 0;
+        }
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+        .playlist-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .playlist-section h2 {
+            color: #495057;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #playlist {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+        .track {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+        .track.current {
+            background: rgba(102, 126, 234, 0.1);
+            border-left: 4px solid var(--secondary-color);
+        }
+        .track-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .track-number {
+            background: var(--secondary-color);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .track-title {
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .track-controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .control-button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .play-button {
+            background: var(--primary-color);
+            color: white;
+        }
+        .delete-button {
+            background: #dc3545;
+            color: white;
+        }
+        .upload-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .upload-section h2 {
+            color: #495057;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #uploadForm {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        input[type="file"] {
+            flex-grow: 1;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+        }
+        button[type="submit"] {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        #uploadStatus {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 8px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        .bottom-controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        .bottom-controls button {
+            background: var(--secondary-color);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>{{STATION_NAME}}</h1>
+                <p>管理面板</p>
+            </div>
+            <div class="admin-info">
+                <span class="admin-badge">管理员</span>
+                <button onclick="logout()" class="logout-button">退出登录</button>
+            </div>
+        </header>
+        
+        <div class="dashboard">
+            <div class="card">
+                <h2>👥 在线听众</h2>
+                <div class="stat-value" id="clientCount">0</div>
+                <div class="stat-label">当前连接数</div>
+            </div>
+            <div class="card">
+                <h2>📊 播放统计</h2>
+                <div class="stat-value" id="trackCount">0</div>
+                <div class="stat-label">总歌曲数</div>
+            </div>
+            <div class="card">
+                <h2>🎵 当前播放</h2>
+                <div class="stat-value" id="currentIndex">-</div>
+                <div class="stat-label">当前歌曲编号</div>
+            </div>
+        </div>
+        
+        <div class="playlist-section">
+            <h2>📋 播放列表管理</h2>
+            <div id="playlist">加载中...</div>
+        </div>
+        
+        <div class="upload-section">
+            <h2>📤 上传新音乐</h2>
+            <form id="uploadForm">
+                <input type="file" id="fileInput" name="file" accept=".mp3,.wav,.flac,.ogg,.m4a,.aac" required>
+                <button type="submit">上传文件</button>
+            </form>
+            <div id="uploadStatus"></div>
+        </div>
+        
+        <div class="bottom-controls">
+            <button onclick="playNext()">下一首</button>
+            <button onclick="playPrev()">上一首</button>
+        </div>
+    </div>
+
+    <script>
+        async function loadPlaylist() {
+            try {
+                const response = await fetch('/api/playlist');
+                const data = await response.json();
+                const playlist = data.playlist || [];
+                const currentIndex = data.current || 0;
+                
+                document.getElementById('trackCount').textContent = playlist.length;
+                document.getElementById('clientCount').textContent = 0; // 稍后通过stats更新
+                document.getElementById('currentIndex').textContent = playlist.length > 0 ? currentIndex + 1 : '-';
+                
+                let html = '';
+                if (playlist.length === 0) {
+                    html = '<div style="text-align: center; padding: 40px; color: #6c757d;">播放列表为空，请上传音乐文件</div>';
+                } else {
+                    playlist.forEach((track, index) => {
+                        const isCurrent = index === currentIndex;
+                        html += `
+                            <div class="track ${isCurrent ? 'current' : ''}">
+                                <div class="track-header">
+                                    <span class="track-number">#${index + 1}</span>
+                                    <div class="track-title" title="${track}">${track}</div>
+                                </div>
+                                <div class="track-controls">
+                                    <button onclick="playTrack(${index})" class="control-button play-button">▶️ 播放</button>
+                                    <button onclick="deleteTrack(${index})" class="control-button delete-button">🗑️ 删除</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                document.getElementById('playlist').innerHTML = html;
+            } catch (error) {
+                console.error('加载播放列表失败:', error);
+            }
+        }
+        
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                document.getElementById('clientCount').textContent = data.clients || 0;
+            } catch (error) {
+                console.error('加载统计失败:', error);
+            }
+        }
+        
+        async function playTrack(index) {
+            try {
+                await fetch('/api/play/' + index, { method: 'POST' });
+                setTimeout(loadPlaylist, 500);
+            } catch (error) {
+                console.error('播放失败:', error);
+            }
+        }
+        
+        async function playNext() {
+            try {
+                await fetch('/api/next', { method: 'POST' });
+                setTimeout(loadPlaylist, 500);
+            } catch (error) {
+                console.error('下一首失败:', error);
+            }
+        }
+        
+        async function playPrev() {
+            try {
+                await fetch('/api/prev', { method: 'POST' });
+                setTimeout(loadPlaylist, 500);
+            } catch (error) {
+                console.error('上一首失败:', error);
+            }
+        }
+        
+        async function deleteTrack(index) {
+            if (!confirm(`确定要删除曲目 #${index + 1}吗？`)) return;
+            
+            try {
+                const response = await fetch('/api/delete/' + index, { method: 'POST' });
+                if (response.ok) {
+                    loadPlaylist();
+                } else {
+                    alert('删除失败');
+                }
+            } catch (error) {
+                console.error('删除失败:', error);
+            }
+        }
+        
+        async function logout() {
+            try {
+                await fetch('/admin/logout', { method: 'POST' });
+                window.location.href = '/';
+            } catch (error) {
+                console.error('退出失败:', error);
+            }
+        }
+        
+        function showMessage(message, type = 'info') {
+            const statusEl = document.getElementById('uploadStatus');
+            statusEl.textContent = message;
+            statusEl.className = type;
+            if (type !== 'info') setTimeout(() => { statusEl.textContent = ''; statusEl.className = ''; }, 5000);
+        }
+        
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files[0]) return showMessage('请选择文件', 'error');
+            if (fileInput.files[0].size > 50 * 1024 * 1024) return showMessage('最大50MB', 'error');
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            showMessage('上传中...', 'info');
+            
+            try {
+                const response = await fetch('/upload', { method: 'POST', body: formData });
+                const text = await response.text();
+                if (response.ok) {
+                    showMessage('✅ ' + text, 'success');
+                    fileInput.value = '';
+                    setTimeout(loadPlaylist, 1000);
+                } else showMessage('❌ ' + text, 'error');
+            } catch (error) { showMessage('❌ 上传失败', 'error'); }
+        });
+        
+        loadPlaylist();
+        loadStats();
+        setInterval(loadPlaylist, 3000);
+        setInterval(loadStats, 2000);
+    </script>
+</body>
+</html>
