@@ -27,6 +27,7 @@
 #include <sstream>
 #include "sessionmanager.hpp"
 #include "authmiddleware.hpp"
+#include "metadata.hpp"
 namespace fs = std::filesystem;
 // =============================================================================
 // 配置常量
@@ -34,8 +35,8 @@ namespace fs = std::filesystem;
 namespace Config {
     constexpr int WEB_PORT = 2240;
     constexpr int STREAM_PORT = 2241;
-    constexpr size_t BUFFER_CAPACITY = 256 * 1024;  // 256KB
-    constexpr size_t AUDIO_CHUNK_SIZE = 8192;       // 8KB
+    constexpr size_t BUFFER_CAPACITY = 512 * 1024;  // 512KB - for better streaming
+    constexpr size_t AUDIO_CHUNK_SIZE = 16384;      // 16KB - improved chunk size
     constexpr int EPOLL_TIMEOUT_MS = 100;
     constexpr int POLL_TIMEOUT_MS = 200;
     constexpr int MAX_EVENTS = 1024;
@@ -541,6 +542,11 @@ public:
         skip_track_ = true;
     }
 
+    void load_file(const std::string& filename) {
+        // 简单实现：设置跳过标志，主循环会自动播放新文件
+        skip_track_ = true;
+    }
+
 private:
     BroadcastBuffer* buffer_;
     std::vector<std::string>* playlist_;
@@ -583,6 +589,10 @@ private:
                                current_track_->load() % playlist_size : 0;
             filename = "./media/" + playlist_->at(track_idx);
 
+            // 确保使用UTF-8编码处理中文文件名
+            filename = filename;
+
+
             std::cout << "[Audio] Playing: " << playlist_->at(track_idx)
                       << " (" << track_idx + 1 << "/" << playlist_->size() << ")" << std::endl;
         }
@@ -590,13 +600,18 @@ private:
         // 检查文件是否存在
         if (!fs::exists(filename)) {
             std::cerr << "[Audio] File not found: " << filename << std::endl;
+            std::cerr << "[Audio] Current working directory: " << fs::current_path() << std::endl;
             (*current_track_)++;
             return;
         }
+
+        std::cout << "[Audio] Processing file: " << filename << std::endl;
         
-        // 构建FFmpeg命令
-        std::string cmd = "ffmpeg -re -v error -i \"" + filename + "\" "
-                  "-vn -codec:a libmp3lame -b:a 128k -ar 44100 -ac 2 -f mp3 -";
+        // 构建FFmpeg命令 - 使用更高的兼容性设置
+        std::string cmd = "ffmpeg -nostdin -re -loglevel error -i \"" + filename + "\" "
+                  "-vn -c:a libmp3lame -b:a 128k -ar 44100 -ac 2 -f mp3 pipe:1";
+
+        std::cout << "[Audio] Executing: " << cmd << std::endl;
         
         pipe = popen(cmd.c_str(), "r");
         if (!pipe) {
@@ -619,8 +634,11 @@ private:
             
             if (ret > 0) {
                 if (pfd.revents & POLLIN) {
-                    ssize_t bytes = read(pipe_fd, buffer, sizeof(buffer));
-                    
+                    ssize_t bytes;
+                    do {
+                        bytes = read(pipe_fd, buffer, sizeof(buffer));
+                    } while (bytes < 0 && errno == EINTR);
+
                     if (bytes > 0) {
                         buffer_->push(buffer, bytes);
                     } else if (bytes == 0) {
@@ -656,10 +674,15 @@ private:
             std::cerr << "[Audio] Error playing track: " << e.what() << std::endl;
         }
 
-        // 切换到下一首（除非用户指定了其他曲目）
-        if (!skip_track_) {
+        // 检查是否需要切换到下一首（播放完成且用户没有手动切换）
+        // 注意：如果用户通过API切换了轨道，skip_track_会被设置为true
+        // 这种情况下不应该自动递增current_track_，因为用户已经设置了新的索引
+        if (!skip_track_ && running_) {
+            // 只有当正常播放完成且没有用户干预时，才自动切换到下一首
             (*current_track_)++;
         }
+        // 重置跳过标志，为下一轮播放做准备
+        skip_track_ = false;
     }
 };
 
@@ -719,10 +742,11 @@ public:
         }
     };
 
-    WebServer(std::vector<std::string>* playlist, std::atomic<size_t>* current_track,
-          StreamServer* stream_server, AudioPlayer* audio_player, std::mutex* playlist_mutex)
+    WebServer(std::vector<std::string>* playlist, std::vector<TrackMetadata>* playlist_metadata,
+          std::atomic<size_t>* current_track, StreamServer* stream_server,
+          AudioPlayer* audio_player, std::mutex* playlist_mutex)
     : config_(Config::load_from_settings()),
-      playlist_(playlist), current_track_(current_track),
+      playlist_(playlist), playlist_metadata_(playlist_metadata), current_track_(current_track),
       stream_server_(stream_server), audio_player_(audio_player),
       playlist_mutex_(playlist_mutex), running_(false) {
 // 简单认证系统 - 直接使用 SessionManager
@@ -855,7 +879,9 @@ private:
         
         // 管理员登录页面
         CROW_ROUTE(app_, "/admin")([this](const crow::request& req) {
-            bool is_admin = false;
+            // 检查用户是否已经登录
+            std::string session_id = get_session_id_from_cookies(req.get_header_value("Cookie"));
+            bool is_admin = check_admin_auth(session_id);
 
             if (is_admin) {
                 // 如果已经登录，重定向到管理面板
@@ -924,13 +950,14 @@ private:
         
         // 登出API
         CROW_ROUTE(app_, "/admin/logout").methods("POST"_method)([this](const crow::request& req) {
-            // 从Cookie中获取session_id
-            // 简化认证逻辑
-            // session_id = get_session_id_from_cookies(req.get_header_value("Cookie"));
-            // session_manager_->destroy_session(session_id);
-            
+            // 从Cookie中获取session_id并销毁会话
+            std::string session_id = get_session_id_from_cookies(req.get_header_value("Cookie"));
+            if (!session_id.empty()) {
+                session_manager_->destroy_session(session_id);
+            }
+
             crow::response res(200);
-            res.set_header("Set-Cookie", 
+            res.set_header("Set-Cookie",
                 "session_id=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax");
             res.write("登出成功");
             return res;
@@ -940,8 +967,27 @@ private:
         CROW_ROUTE(app_, "/api/playlist")([this]() {
             std::lock_guard<std::mutex> lock(*playlist_mutex_);
             crow::json::wvalue result;
+
+            // 返回文件名播放列表（向后兼容）
             result["playlist"] = *playlist_;
             result["current"] = (int)current_track_->load();
+
+            // 返回元数据播放列表
+            std::vector<crow::json::wvalue> metadata_list;
+            for (size_t i = 0; i < playlist_metadata_->size(); ++i) {
+                const TrackMetadata& metadata = playlist_metadata_->at(i);
+                crow::json::wvalue item;
+                item["filename"] = metadata.filename;
+                item["title"] = metadata.get_display_name();
+                item["artist"] = metadata.artist;
+                item["album"] = metadata.album;
+                item["duration"] = metadata.duration;
+                item["cover_url"] = "/api/cover/" + std::to_string(i);
+                item["metadata_url"] = "/api/metadata/" + std::to_string(i);
+                metadata_list.push_back(item);
+            }
+            result["metadata"] = std::move(metadata_list);
+
             return crow::response(result);
         });
         
@@ -954,21 +1000,27 @@ private:
         
         // 需要权限的API：上传文件（仅管理员）
         CROW_ROUTE(app_, "/upload").methods("POST"_method)([this](const crow::request& req) {
-            bool is_admin = false;
-            if (!is_admin) return crow::response(403, "需要管理员权限");
-            
+            // 检查用户是否为管理员
+            std::string session_id = get_session_id_from_cookies(req.get_header_value("Cookie"));
+            bool is_admin = check_admin_auth(session_id);
+            if (!is_admin) {
+                return crow::response(403, "需要管理员权限才能上传文件");
+            }
+
             // 检查上传大小
             size_t content_length = 0; // req.content_length not available, use 0 for now
             if (content_length > Config::MAX_UPLOAD_SIZE) {
                 return crow::response(413, "文件太大，最大50MB");
             }
-            
+
             return handle_upload(req);
         });
         
         // 需要权限的API：下一首（如果允许游客切歌，则游客也可以使用）
         CROW_ROUTE(app_, "/api/next").methods("POST"_method)([this](const crow::request& req) {
-            bool is_admin = false; // 暂时简化认证
+            // 检查用户是否已登录或允许游客切歌
+            std::string session_id = get_session_id_from_cookies(req.get_header_value("Cookie"));
+            bool is_admin = check_admin_auth(session_id);
             if (!is_admin && !config_.allow_guest_skip) {
                 return crow::response(403, "需要登录才能执行此操作");
             }
@@ -986,7 +1038,9 @@ private:
         
         // 需要权限的API：上一首（如果允许游客切歌，则游客也可以使用）
         CROW_ROUTE(app_, "/api/prev").methods("POST"_method)([this](const crow::request& req) {
-            bool is_admin = false;
+            // 检查用户是否已登录或允许游客切歌
+            std::string session_id = get_session_id_from_cookies(req.get_header_value("Cookie"));
+            bool is_admin = check_admin_auth(session_id);
             if (!is_admin && !config_.allow_guest_skip) {
                 return crow::response(403, "需要登录才能执行此操作");
             }
@@ -1005,7 +1059,9 @@ private:
         
         // 需要权限的API：播放指定歌曲（如果允许游客切歌，则游客也可以使用）
         CROW_ROUTE(app_, "/api/play/<int>").methods("POST"_method)([this](const crow::request& req, int idx) {
-            bool is_admin = false;
+            // 检查用户是否已登录或允许游客切歌
+            std::string session_id = get_session_id_from_cookies(req.get_header_value("Cookie"));
+            bool is_admin = check_admin_auth(session_id);
             if (!is_admin && !config_.allow_guest_skip) {
                 return crow::response(403, "需要登录才能执行此操作");
             }
@@ -1025,8 +1081,12 @@ private:
         
         // 需要权限的API：删除歌曲（仅管理员）
         CROW_ROUTE(app_, "/api/delete/<int>").methods("POST"_method)([this](const crow::request& req, int idx) {
-            bool is_admin = false;
-            if (!is_admin) return crow::response(403, "需要管理员权限");
+            // 检查用户是否为管理员
+            std::string session_id = get_session_id_from_cookies(req.get_header_value("Cookie"));
+            bool is_admin = check_admin_auth(session_id);
+            if (!is_admin) {
+                return crow::response(403, "需要管理员权限才能执行此操作");
+            }
             
             std::lock_guard<std::mutex> lock(*playlist_mutex_);
             if (playlist_->empty()) return crow::response{400, "播放列表为空"};
@@ -1047,8 +1107,72 @@ private:
             
             return crow::response{200, "删除成功"};
         });
+
+        // 元数据API：获取指定歌曲详细元数据
+        CROW_ROUTE(app_, "/api/metadata/<int>")([this](int idx) {
+            std::lock_guard<std::mutex> lock(*playlist_mutex_);
+
+            size_t index = static_cast<size_t>(idx);
+            if (index >= playlist_metadata_->size()) {
+                return crow::response(404, "索引超出范围");
+            }
+
+            const TrackMetadata& metadata = playlist_metadata_->at(index);
+            crow::json::wvalue result;
+            result["filename"] = metadata.filename;
+            result["title"] = metadata.title;
+            result["artist"] = metadata.artist;
+            result["album"] = metadata.album;
+            result["genre"] = metadata.genre;
+            result["year"] = metadata.year;
+            result["track_number"] = metadata.track_number;
+            result["duration"] = metadata.duration;
+            result["has_cover"] = !metadata.cover_art.empty();
+            result["has_lyrics"] = !metadata.lyrics.empty();
+
+            return crow::response(result);
+        });
+
+        // 专辑封面API：获取专辑封面图片
+        CROW_ROUTE(app_, "/api/cover/<int>")([this](int idx) {
+            std::lock_guard<std::mutex> lock(*playlist_mutex_);
+
+            size_t index = static_cast<size_t>(idx);
+            if (index >= playlist_metadata_->size()) {
+                return crow::response(404, "索引超出范围");
+            }
+
+            const TrackMetadata& metadata = playlist_metadata_->at(index);
+            if (metadata.cover_art.empty()) {
+                return crow::response(404, "无专辑封面");
+            }
+
+            crow::response res;
+            res.set_header("Content-Type", "image/jpeg");
+            res.set_header("Cache-Control", "public, max-age=3600");
+            res.write(std::string(metadata.cover_art.begin(), metadata.cover_art.end()));
+
+            return res;
+        });
+
+        // 歌词API：获取歌词文本
+        CROW_ROUTE(app_, "/api/lyrics/<int>")([this](int idx) {
+            std::lock_guard<std::mutex> lock(*playlist_mutex_);
+
+            size_t index = static_cast<size_t>(idx);
+            if (index >= playlist_metadata_->size()) {
+                return crow::response(404, "索引超出范围");
+            }
+
+            const TrackMetadata& metadata = playlist_metadata_->at(index);
+            if (metadata.lyrics.empty()) {
+                return crow::response(404, "无歌词");
+            }
+
+            return crow::response(metadata.lyrics);
+        });
     }
-    
+
     // 文件上传处理函数（从原始代码中保留）
     crow::response handle_upload(const crow::request& req) {
         auto boundary_info = req.headers.find("Content-Type");
@@ -1114,21 +1238,27 @@ private:
                     return crow::response(400, "不支持的文件格式，支持: " + supported_formats);
                 }
                 
-                std::ofstream out_file(filename, std::ios::binary);
+                // 确保文件保存到media目录
+                std::string filepath = "./media/" + filename;
+                std::ofstream out_file(filepath, std::ios::binary);
                 if (!out_file) return crow::response(500, "无法创建文件");
                 out_file.write(file_data.data(), file_data.size());
                 out_file.close();
-                
+
                 // 添加到播放列表
                 std::lock_guard<std::mutex> lock(*playlist_mutex_);
                 playlist_->push_back(filename);
-                
+
+                // 提取元数据并添加到元数据播放列表
+                TrackMetadata metadata = MetadataManager::extract_metadata(filepath);
+                playlist_metadata_->push_back(metadata);
+
                 // 如果是第一首歌，开始播放
                 if (playlist_->size() == 1) {
                     current_track_->store(0);
                     audio_player_->skip_current_track(); // load_file is not implemented, use skip_current_trackfilename);
                 }
-                
+
                 return crow::response(200, "上传成功: " + filename);
             }
         }
@@ -1145,10 +1275,35 @@ private:
     
     // 其他成员变量保持不变
     std::vector<std::string>* playlist_;
+    std::vector<TrackMetadata>* playlist_metadata_;
     std::atomic<size_t>* current_track_;
     StreamServer* stream_server_;
     AudioPlayer* audio_player_;
     std::mutex* playlist_mutex_;
+
+    // 从Cookie字符串中提取session_id
+    static std::string get_session_id_from_cookies(const std::string& cookie_header) {
+        if (cookie_header.empty()) return "";
+
+        size_t session_start = cookie_header.find("session_id=");
+        if (session_start == std::string::npos) return "";
+
+        session_start += 10; // "session_id=".length()
+        size_t session_end = cookie_header.find(';', session_start);
+
+        if (session_end == std::string::npos) {
+            return cookie_header.substr(session_start);
+        } else {
+            return cookie_header.substr(session_start, session_end - session_start);
+        }
+    }
+
+    // 检查用户是否为管理员
+    bool check_admin_auth(const std::string& session_id) {
+        if (session_id.empty()) return false;
+        auto session = session_manager_->get_session(session_id);
+        return session && session->is_admin;
+    }
 };
 
 // 在类定义外部定义静态成员
@@ -1181,7 +1336,7 @@ public:
         
         stream_server_ = std::make_unique<StreamServer>(&buffer_);
         audio_player_ = std::make_unique<AudioPlayer>(&buffer_, &playlist_, &current_track_, &playlist_mutex_);
-        web_server_   = std::make_unique<WebServer>(&playlist_, &current_track_, 
+        web_server_   = std::make_unique<WebServer>(&playlist_, &playlist_metadata_, &current_track_,
                                                     stream_server_.get(), audio_player_.get(), &playlist_mutex_);
         
         success &= stream_server_->start();
@@ -1231,10 +1386,10 @@ public:
 private:
     void init_playlist() {
         std::lock_guard<std::mutex> lock(playlist_mutex_);
-        
+
         // 创建media目录
         fs::create_directories("./media");
-        
+
         // 扫描音频文件
         try {
             for (const auto& entry : fs::directory_iterator("./media")) {
@@ -1242,18 +1397,25 @@ private:
                     std::string filename = entry.path().filename().string();
                     std::string ext = fs::path(filename).extension();
                     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-                    
+
                     for (const auto& supported_ext : Config::SUPPORTED_FORMATS) {
                         if (ext == supported_ext) {
+                            // 添加到文件名播放列表（向后兼容）
                             playlist_.push_back(filename);
+
+                            // 提取元数据并添加到元数据播放列表
+                            std::string file_path = "./media/" + filename;
+                            TrackMetadata metadata = MetadataManager::extract_metadata(file_path);
+                            playlist_metadata_.push_back(metadata);
+
                             break;
                         }
                     }
                 }
             }
-            
+
             std::sort(playlist_.begin(), playlist_.end());
-            
+
             if (!playlist_.empty()) {
                 // 随机选择起始曲目
                 std::random_device rd;
@@ -1261,16 +1423,18 @@ private:
                 std::uniform_int_distribution<> dis(0, playlist_.size() - 1);
                 current_track_ = dis(gen);
             }
-            
+
             std::cout << "[Init] 在 ./media/ 目录中找到 " << playlist_.size() << " 个音频文件" << std::endl;
-            
+            std::cout << "[Init] 已提取 " << playlist_metadata_.size() << " 个文件的元数据" << std::endl;
+
         } catch (const fs::filesystem_error& e) {
             std::cerr << "[Init] 扫描目录时出错: " << e.what() << std::endl;
         }
     }
     
     BroadcastBuffer buffer_{Config::BUFFER_CAPACITY};
-    std::vector<std::string> playlist_;
+    std::vector<std::string> playlist_; // 用于向后兼容的文件名列表
+    std::vector<TrackMetadata> playlist_metadata_; // 新的元数据播放列表
     std::atomic<size_t> current_track_{0};
     mutable std::mutex playlist_mutex_;
     

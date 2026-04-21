@@ -46,7 +46,7 @@ elif [ -f /etc/debian_version ] || [ -f /etc/lsb-release ]; then
     OS="Debian/Ubuntu"
     PKG_MGR="apt"
     INSTALL_CMD="sudo apt-get install -y"
-    DEPENDENCIES="build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev locales wget libasio-dev"
+    DEPENDENCIES="build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev locales wget libasio-dev libtag1-dev"
 else
     print_error "不支持的操作系统。仅支持 Arch Linux 和 Debian/Ubuntu 系列"
     exit 1
@@ -109,7 +109,7 @@ mkdir -p $RELEASE_DIR/templates
 # 编译参数
 CXXFLAGS="-std=c++17 -O3 -flto -march=native -lpthread -lssl -lcrypto -I. -w"
 
-g++ radioserver.cpp -o $RELEASE_DIR/radioserver $CXXFLAGS
+g++ radioserver.cpp metadata.cpp -o $RELEASE_DIR/radioserver $CXXFLAGS
 
 if [ -f "$RELEASE_DIR/radioserver" ]; then
     # 可选：移除调试符号减小体积
