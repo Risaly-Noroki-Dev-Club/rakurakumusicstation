@@ -29,6 +29,7 @@
 
 ### 1. 自动构建（推荐）
 
+### 第 2 步：一键构建
 ```bash
 # 运行构建脚本（自动处理依赖）
 ./build_release.sh
@@ -45,6 +46,7 @@ cp /path/to/your/music/*.mp3 ./media/
 
 ### 2. 手动构建
 
+### 第 4 步：启动服务器
 ```bash
 # 安装依赖（Ubuntu/Debian）
 sudo apt-get install build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev wget
@@ -202,6 +204,8 @@ g++ radioserver.cpp -o radioserver -std=c++17 -g -O0 -lpthread -lssl -lcrypto -I
 - [Crow C++](https://github.com/CrowCpp/Crow) - 轻量级 Web 框架
 - [FFmpeg](https://ffmpeg.org/) - 强大的多媒体处理库
 - [Boost C++ Libraries](https://www.boost.org/) - C++ 扩展库
+- [Cynun] - 你不知道她是谁，她也许只想呆在这里。但是如果没有她，这个项目不可能存在
+- [知夏] - 如果没有ta，这个项目走不到今天。祝他身体健康。
 
 ---
 
