@@ -35,18 +35,18 @@ echo -e "${BLUE}
 ══════════════════════════════════════════════${NC}
 "
 
-# 1. 检查系统环境
+# 检查系统环境
 print_status "检测系统环境..."
 if [ -f /etc/arch-release ]; then
     OS="Arch Linux"
     PKG_MGR="pacman"
     INSTALL_CMD="sudo pacman -S --needed --noconfirm"
-    DEPENDENCIES="base-devel ffmpeg openssl boost cmake wget asio"
+    DEPENDENCIES="base-devel ffmpeg openssl wget asio"
 elif [ -f /etc/debian_version ] || [ -f /etc/lsb-release ]; then
     OS="Debian/Ubuntu"
     PKG_MGR="apt"
     INSTALL_CMD="sudo apt-get install -y"
-    DEPENDENCIES="build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev locales wget libasio-dev libtag1-dev"
+    DEPENDENCIES="build-essential ffmpeg libssl-dev wget libasio-dev"
 else
     print_error "不支持的操作系统。仅支持 Arch Linux 和 Debian/Ubuntu 系列"
     exit 1
@@ -54,7 +54,7 @@ fi
 
 print_success "检测到系统: $OS"
 
-# 2. 检查并安装依赖
+# 检查并安装依赖
 print_status "检查系统依赖..."
 if [ "$PKG_MGR" == "apt" ]; then
     sudo apt-get update > /dev/null 2>&1
@@ -78,15 +78,7 @@ fi
 print_status "安装系统依赖包..."
 $INSTALL_CMD $DEPENDENCIES > /dev/null 2>&1
 
-# 3. 设置中文环境（可选）
-print_status "检查语言环境支持..."
-if ! locale -a | grep -qi "zh_CN.utf8"; then
-    print_warning "中文语言环境未启用，但不影响基础功能"
-else
-    print_success "中文环境支持已启用"
-fi
-
-# 4. 验证 FFmpeg
+# 验证 FFmpeg
 print_status "检查 FFmpeg 支持..."
 if command -v ffmpeg > /dev/null 2>&1; then
     if ffmpeg -encoders | grep -q "libmp3lame"; then
@@ -99,7 +91,7 @@ else
     exit 1
 fi
 
-# 5. 编译项目
+# 编译项目
 print_status "编译服务器程序..."
 RELEASE_DIR="dist"
 rm -rf $RELEASE_DIR
@@ -122,7 +114,7 @@ else
     exit 1
 fi
 
-# 6. 复制配置文件
+# 复制配置文件
 print_status "准备运行环境..."
 
 # 基础模板文件
