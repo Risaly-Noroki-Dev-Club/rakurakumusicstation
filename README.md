@@ -1,214 +1,337 @@
 # 🎵 Rakuraku Music Station
 
-一个轻量级、高性能的 C++ 流媒体广播服务器，支持实时音频流传输和 Web 管理界面。
+A lightweight, high-performance C++ streaming broadcast server for low-latency audio distribution, with a built-in web admin panel.
+
+一个轻量级、高性能的 C++ 流媒体广播服务器，支持低延迟音频分发，内置 Web 管理面板。
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
 ![C++](https://img.shields.io/badge/C++-17-orange.svg)
 
-## ✨ 特性
+**Languages / 语言**: [English](#english) · [中文](#中文)
 
-- 🚀 **高性能**：基于 Linux epoll 的非阻塞 I/O，支持大量并发连接
-- 🎧 **多格式支持**：MP3, WAV, FLAC, OGG, M4A, AAC 等常见音频格式
-- 🌐 **Web 界面**：现代化的管理界面，支持文件上传和播放列表管理
-- 🔐 **权限控制**：基于会话的认证系统，区分普通用户和管理员
-- 📱 **流媒体兼容**：标准 HTTP 流媒体协议，支持各种音频播放器
-- 🛠️ **易于部署**：一键式构建脚本，无需复杂配置
+---
 
-## 📋 系统要求
+## English
 
-- **操作系统**: Linux (Ubuntu/Debian/Arch Linux)
-- **依赖**: 
-  - GCC/G++ 7.0+ 或 Clang
-  - FFmpeg (音频处理)
-  - OpenSSL (加密支持)
-  - Boost C++ Libraries
-  - Crow Framework (Web 框架)
+### Overview
 
-## 🚀 快速开始
+Rakuraku Music Station broadcasts the same audio stream to every connected listener, radio-style. A single `ffmpeg`-backed decoder feeds a thread-safe ring buffer, and a Linux `epoll` loop fans the bytes out to HTTP clients on port **2241**. The Crow-based web panel on port **2240** handles playlist management, uploads, and playback control.
 
-### 1. 自动构建（推荐）
+### Features
 
-### 第 2 步：一键构建
+- **High performance** — non-blocking I/O via Linux `epoll`; many concurrent listeners on one thread.
+- **Radio-style broadcast** — a single decoder feeds a shared ring buffer; every client hears the same stream in sync.
+- **Format support** — MP3, WAV, FLAC, OGG, M4A, AAC via FFmpeg.
+- **Hot-reload playlist** — uploaded files appear in the playlist immediately; no restart needed.
+- **Metadata / cover / lyrics APIs** — per-track endpoints for title, artist, duration, embedded cover art, and lyrics.
+- **Session auth** — cookie-based admin sessions; optional guest skip permission.
+- **Templated UI** — `{{VAR}}` substitution from `settings.json` (station name, colors, subtitle).
+- **One-shot build** — `build_release.sh` installs deps, fetches Crow, and emits a self-contained `dist/`.
+
+### Requirements
+
+- Linux (Arch, Debian, or Ubuntu — the build script auto-detects)
+- GCC/G++ 7+ with C++17, or Clang
+- FFmpeg, OpenSSL, Boost, Asio
+
+### Quick Start
+
 ```bash
-# 运行构建脚本（自动处理依赖）
+# Build — installs dependencies and produces dist/
 ./build_release.sh
 
-# 进入发布目录
+# Add audio files (Chinese / Japanese filenames are fine)
+cp /path/to/music/*.mp3 dist/media/
+
+# Run
 cd dist
-
-# 添加音乐文件（支持中文文件名）
-cp /path/to/your/music/*.mp3 ./media/
-
-# 启动服务器
 ./start.sh
 ```
 
-### 2. 手动构建
+Then open:
 
-### 第 4 步：启动服务器
+- Web admin: <http://localhost:2240>
+- Audio stream: <http://localhost:2241> (VLC, browsers, any HTTP-capable player)
+
+Stop with `./stop.sh`.
+
+### Manual Build (Development)
+
 ```bash
-# 安装依赖（Ubuntu/Debian）
-sudo apt-get install build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev wget
+# Debian/Ubuntu deps
+sudo apt-get install build-essential ffmpeg libavcodec-extra libssl-dev \
+                     libboost-all-dev libasio-dev wget locales
 
-# 下载 Crow 框架
+# Crow header
 wget https://github.com/CrowCpp/Crow/releases/download/v1.3.2/crow_all.h
 
-# 编译
-mkdir -p dist/media
-g++ radioserver.cpp -o dist/radioserver -std=c++17 -O3 -lpthread -lssl -lcrypto -I.
-
-# 运行
-cd dist
-./radioserver
+# Debug build
+g++ radioserver.cpp metadata.cpp -o radioserver \
+    -std=c++17 -g -O0 -lpthread -lssl -lcrypto -I.
 ```
 
-## 🎮 使用方法
-
-### 启动服务器
-
-```bash
-cd dist
-./start.sh
-```
-
-启动后可以通过以下地址访问：
-
-- **Web 管理界面**: http://localhost:2240
-- **流媒体端点**: http://localhost:2241
-- **播放器兼容**: 兼容 VLC, Chrome, Firefox 等主流播放器
-
-### 基本操作
-
-1. **添加音乐**：将音频文件放入 `media/` 目录，服务器会自动扫描并添加到播放列表
-2. **Web 管理**：访问 http://localhost:2240 进行播放控制和文件管理
-3. **管理员登录**：点击"管理面板"，使用默认密码 `admin123`
-
-### 配置文件
-
-编辑 `settings.json` 自定义服务器设置：
+### Configuration — `settings.json`
 
 ```json
 {
-    "station_name": "我的音乐电台",
-    "subtitle": "个性化描述",
+    "station_name": "Rakuraku Music Station",
+    "subtitle": "Your tagline here",
     "primary_color": "#764ba2",
-    "secondary_color": "#667eea", 
+    "secondary_color": "#667eea",
     "bg_color": "#f4f4f9",
-    "admin_password": "你的密码",
+    "admin_password": "change_me",
     "allow_guest_skip": false
 }
 ```
 
-## 📁 项目结构
+- `admin_password` — falls back to `admin123` if unset. **Change it in production.**
+- `allow_guest_skip` — if `true`, unauthenticated clients can POST `/api/next` and `/api/prev`.
+
+### HTTP API
+
+Public:
+
+| Method | Path                   | Description                                    |
+| ------ | ---------------------- | ---------------------------------------------- |
+| GET    | `/`                    | Listener page (or admin panel if logged in)    |
+| GET    | `/api/playlist`        | Playlist + per-track metadata                  |
+| GET    | `/api/stats`           | Current listener count                         |
+| GET    | `/api/metadata/<idx>`  | Full metadata for track `idx`                  |
+| GET    | `/api/cover/<idx>`     | Embedded cover art (or placeholder)            |
+| GET    | `/api/lyrics/<idx>`    | Lyrics, if available                           |
+
+Admin (session cookie required):
+
+| Method | Path                 | Description                         |
+| ------ | -------------------- | ----------------------------------- |
+| POST   | `/admin/login`       | `{ "password": "..." }` → cookie    |
+| POST   | `/admin/logout`      | Destroy session                     |
+| POST   | `/upload`            | Multipart upload (≤ 50 MB)          |
+| POST   | `/api/next`          | Skip forward (guest-allowed opt)    |
+| POST   | `/api/prev`          | Skip backward (guest-allowed opt)   |
+| POST   | `/api/play/<idx>`    | Jump to track `idx`                 |
+| POST   | `/api/delete/<idx>`  | Remove track `idx`                  |
+
+### Architecture
+
+| Component          | Role                                                                  |
+| ------------------ | --------------------------------------------------------------------- |
+| `StreamServer`     | `epoll` loop fanning out audio bytes to listeners on port 2241        |
+| `AudioPlayer`      | Spawns FFmpeg with `-re`, pipes decoded audio into the buffer         |
+| `BroadcastBuffer`  | Power-of-two ring buffer; one producer, many consumers                |
+| `WebServer`        | Crow app on port 2240 serving UI and REST APIs                        |
+| `SessionManager`   | In-memory session table with 24-hour expiry                           |
+| `AuthMiddleware`   | Crow middleware that resolves `session_id` cookies to admin state     |
+
+### Ports
+
+- `2240` — web admin / API
+- `2241` — audio stream
+
+### Project Layout
 
 ```
-rakurakumusicstation/
-├── radioserver.cpp          # 主服务器实现
-├── authmiddleware.hpp       # 认证中间件
-├── sessionmanager.hpp       # 会话管理
-├── settings.json            # 配置文件
-├── build_release.sh         # 自动化构建脚本
-├── README.md               # 项目文档
-└── dist/                   # 发布目录
-    ├── radioserver         # 可执行文件
-    ├── start.sh           # 启动脚本
-    ├── stop.sh            # 停止脚本
-    ├── settings.json      # 配置文件
-    ├── index.html         # Web 界面模板
-    └── media/             # 音乐文件目录
+├── radioserver.cpp        # Main server
+├── metadata.{hpp,cpp}     # Audio metadata extraction
+├── authmiddleware.hpp     # Crow auth middleware
+├── sessionmanager.hpp     # Session store
+├── build_release.sh       # One-shot build script
+├── settings.json          # Runtime config
+├── templates/             # HTML templates (optional)
+└── dist/                  # Build output
+    ├── radioserver
+    ├── start.sh / stop.sh
+    ├── media/             # Audio files live here
+    └── templates/
 ```
 
-## 🔧 技术架构
+### Troubleshooting
 
-### 核心组件
+- **Garbled non-ASCII filenames** — regenerate locale: `sudo locale-gen zh_CN.UTF-8 && sudo update-locale LANG=zh_CN.UTF-8`, or start via `./start.sh` which sets it for you.
+- **Port already in use** — `ss -ltnp | grep -E ':2240|:2241'` and free the port, or edit `Config::WEB_PORT` / `Config::STREAM_PORT` in `radioserver.cpp`.
+- **Pipe error `revents=16`** — usually a locale issue; see above.
+- **No audio plays** — confirm `ffmpeg` is on `PATH` and the file extension is in the supported list.
 
-- **StreamServer**: 基于 epoll 的异步流媒体服务器
-- **AudioPlayer**: FFmpeg 音频解码和转码引擎
-- **BroadcastBuffer**: 线程安全的环形缓冲区
-- **WebServer**: Crow 框架 Web 管理界面
-- **SessionManager**: 会话管理和认证系统
+Logs live at `dist/server.log`.
 
-### 端口配置
+### Security Notes
 
-- **Web 端口**: 2240 (HTTP 管理界面)
-- **流媒体端口**: 2241 (音频流传输)
+- Change `admin_password` before exposing the server.
+- Sessions are cookie-only (`HttpOnly`, `SameSite=Lax`) — put a TLS-terminating proxy in front for public deployments.
+- Uploads cap at 50 MB and reject unsupported extensions, but the admin endpoint is your trust boundary.
 
-## 🐛 故障排除
+### License
 
-### 常见问题
+MIT — see [LICENSE](LICENSE).
 
-**1. 编译失败**
-```bash
-# 确保安装所有依赖
-sudo apt-get update
-sudo apt-get install build-essential ffmpeg libssl-dev libboost-all-dev
-```
+### Credits
 
-**2. 中文文件名乱码**
-```bash
-# 启用中文语言环境
-sudo locale-gen zh_CN.UTF-8
-sudo update-locale LANG=zh_CN.UTF-8
-```
-
-**3. 端口被占用**
-```bash
-# 检查端口使用情况
-netstat -tulpn | grep :2240
-# 或更换端口（修改 settings.json）
-```
-
-**4. 音频无法播放**
-- 确保 FFmpeg 支持 MP3 编码
-- 验证音频文件格式是否为支持的类型
-- 检查文件权限和路径
-
-### 日志查看
-
-```bash
-# 实时查看日志
-tail -f dist/server.log
-
-# 查看错误信息
-cat dist/server.log | grep ERROR
-```
-
-## 🔒 安全建议
-
-1. **修改默认密码**：生产环境务必修改 `admin_password`
-2. **防火墙配置**：限制对 2240/2241 端口的访问
-3. **文件上传限制**：避免上传大文件或不安全内容
-4. **HTTPS 支持**：如需公网访问，建议配置 SSL/TLS
-
-## 🤝 贡献
-
-欢迎提交 Issues 和 Pull Requests！
-
-### 开发环境设置
-
-```bash
-# 调试构建
-g++ radioserver.cpp -o radioserver -std=c++17 -g -O0 -lpthread -lssl -lcrypto -I.
-
-# 运行测试
-./radioserver
-```
-
-## 📄 许可证
-
-本项目基于 MIT 许可证开源 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 🙏 致谢
-
-- [Crow C++](https://github.com/CrowCpp/Crow) - 轻量级 Web 框架
-- [FFmpeg](https://ffmpeg.org/) - 强大的多媒体处理库
-- [Boost C++ Libraries](https://www.boost.org/) - C++ 扩展库
-- [Cynun] - 你不知道她是谁，她也许只想呆在这里。但是如果没有她，这个项目不可能存在
-- [知夏] - 如果没有ta，这个项目走不到今天。祝他身体健康。
+- [Crow](https://github.com/CrowCpp/Crow) — header-only C++ web framework
+- [FFmpeg](https://ffmpeg.org/) — audio decoding
+- [Boost](https://www.boost.org/) / [Asio](https://think-async.com/Asio/) — networking primitives
 
 ---
 
-<div align="center">
-  <p><em>如果本项目对你有帮助，请点个 ⭐ Star 支持！</em></p>
-</div>
+## 中文
+
+### 概述
+
+Rakuraku Music Station 以电台的方式，将同一路音频流推送给所有连接的听众。由 `ffmpeg` 驱动的单一解码器向线程安全的环形缓冲区写入数据，Linux `epoll` 循环把字节分发到 **2241** 端口上的 HTTP 客户端；**2240** 端口上基于 Crow 的 Web 面板负责播放列表管理、上传与播控。
+
+### 特性
+
+- **高性能** — 基于 `epoll` 的非阻塞 I/O，一个线程即可承载大量并发听众。
+- **电台式广播** — 单一解码器写入共享环形缓冲区，所有客户端同步听到同一路流。
+- **多格式支持** — 通过 FFmpeg 支持 MP3、WAV、FLAC、OGG、M4A、AAC。
+- **热重载播放列表** — 上传文件后立即出现在播放列表中，无需重启。
+- **元数据 / 封面 / 歌词 API** — 按曲目提供标题、艺术家、时长、内嵌封面和歌词接口。
+- **会话认证** — 基于 Cookie 的管理员会话，可选开放游客切歌权限。
+- **模板化 UI** — 从 `settings.json` 注入 `{{VAR}}` 变量（台名、颜色、副标题）。
+- **一键构建** — `build_release.sh` 自动安装依赖、拉取 Crow，并生成独立的 `dist/`。
+
+### 系统要求
+
+- Linux（Arch / Debian / Ubuntu，构建脚本自动识别）
+- 支持 C++17 的 GCC/G++ 7+ 或 Clang
+- FFmpeg、OpenSSL、Boost、Asio
+
+### 快速开始
+
+```bash
+# 构建 — 自动安装依赖并生成 dist/
+./build_release.sh
+
+# 放入音频文件（中文 / 日文文件名都支持）
+cp /path/to/music/*.mp3 dist/media/
+
+# 启动
+cd dist
+./start.sh
+```
+
+访问：
+
+- Web 管理：<http://localhost:2240>
+- 音频流：<http://localhost:2241>（VLC、浏览器或任意支持 HTTP 的播放器）
+
+使用 `./stop.sh` 停止服务。
+
+### 手动构建（开发）
+
+```bash
+# Debian/Ubuntu 依赖
+sudo apt-get install build-essential ffmpeg libavcodec-extra libssl-dev \
+                     libboost-all-dev libasio-dev wget locales
+
+# 下载 Crow 头文件
+wget https://github.com/CrowCpp/Crow/releases/download/v1.3.2/crow_all.h
+
+# 调试构建
+g++ radioserver.cpp metadata.cpp -o radioserver \
+    -std=c++17 -g -O0 -lpthread -lssl -lcrypto -I.
+```
+
+### 配置 — `settings.json`
+
+```json
+{
+    "station_name": "Rakuraku Music Station",
+    "subtitle": "你的副标题",
+    "primary_color": "#764ba2",
+    "secondary_color": "#667eea",
+    "bg_color": "#f4f4f9",
+    "admin_password": "change_me",
+    "allow_guest_skip": false
+}
+```
+
+- `admin_password` — 未设置时回退到 `admin123`，**生产环境务必修改**。
+- `allow_guest_skip` — 为 `true` 时，未登录用户也可以 POST `/api/next` 和 `/api/prev`。
+
+### HTTP API
+
+公开接口：
+
+| 方法 | 路径                   | 说明                                 |
+| ---- | ---------------------- | ------------------------------------ |
+| GET  | `/`                    | 听众页（已登录则显示管理面板）        |
+| GET  | `/api/playlist`        | 播放列表 + 每首曲目的元数据           |
+| GET  | `/api/stats`           | 当前在线听众数                        |
+| GET  | `/api/metadata/<idx>`  | 曲目 `idx` 的完整元数据               |
+| GET  | `/api/cover/<idx>`     | 内嵌封面（无则返回占位图）            |
+| GET  | `/api/lyrics/<idx>`    | 歌词（如有）                          |
+
+管理员接口（需要 session cookie）：
+
+| 方法 | 路径                 | 说明                              |
+| ---- | -------------------- | --------------------------------- |
+| POST | `/admin/login`       | `{ "password": "..." }` → cookie  |
+| POST | `/admin/logout`      | 销毁会话                          |
+| POST | `/upload`            | 分块上传（≤ 50 MB）               |
+| POST | `/api/next`          | 下一首（可放宽给游客）            |
+| POST | `/api/prev`          | 上一首（可放宽给游客）            |
+| POST | `/api/play/<idx>`    | 跳转到曲目 `idx`                  |
+| POST | `/api/delete/<idx>`  | 删除曲目 `idx`                    |
+
+### 架构
+
+| 组件               | 职责                                                        |
+| ------------------ | ----------------------------------------------------------- |
+| `StreamServer`     | 使用 `epoll` 将音频字节分发到 2241 端口上的听众             |
+| `AudioPlayer`      | 以 `-re` 模式调起 FFmpeg，把解码后的音频写入缓冲区          |
+| `BroadcastBuffer`  | 2 的幂次容量的环形缓冲区，单生产者、多消费者                |
+| `WebServer`        | 运行在 2240 端口上的 Crow 应用，提供 UI 与 REST API         |
+| `SessionManager`   | 内存态会话表，24 小时过期                                   |
+| `AuthMiddleware`   | Crow 中间件，将 `session_id` Cookie 解析为管理员状态        |
+
+### 端口
+
+- `2240` — Web 管理 / API
+- `2241` — 音频流
+
+### 项目结构
+
+```
+├── radioserver.cpp        # 主服务器
+├── metadata.{hpp,cpp}     # 音频元数据提取
+├── authmiddleware.hpp     # Crow 认证中间件
+├── sessionmanager.hpp     # 会话存储
+├── build_release.sh       # 一键构建脚本
+├── settings.json          # 运行时配置
+├── templates/             # HTML 模板（可选）
+└── dist/                  # 构建产物
+    ├── radioserver
+    ├── start.sh / stop.sh
+    ├── media/             # 音频文件放这里
+    └── templates/
+```
+
+### 故障排除
+
+- **非 ASCII 文件名乱码** — 重新生成 locale：`sudo locale-gen zh_CN.UTF-8 && sudo update-locale LANG=zh_CN.UTF-8`，或直接使用 `./start.sh`（内部已设置）。
+- **端口被占用** — `ss -ltnp | grep -E ':2240|:2241'` 查占用进程，或修改 `radioserver.cpp` 中的 `Config::WEB_PORT` / `Config::STREAM_PORT`。
+- **管道错误 `revents=16`** — 通常是 locale 问题，参考上一条。
+- **没有声音** — 确认 `ffmpeg` 在 `PATH` 中，且文件扩展名在支持列表内。
+
+日志位于 `dist/server.log`。
+
+### 安全建议
+
+- 对外部署前务必修改 `admin_password`。
+- 会话仅走 Cookie（`HttpOnly`、`SameSite=Lax`），公网部署请在前面挂 TLS 反向代理。
+- 上传限制 50 MB 并校验扩展名，但管理员接口本身才是信任边界。
+
+### 许可证
+
+MIT — 详见 [LICENSE](LICENSE)。
+
+### 致谢
+
+- [Crow](https://github.com/CrowCpp/Crow) — 轻量级 C++ Web 框架
+- [FFmpeg](https://ffmpeg.org/) — 音频解码
+- [Boost](https://www.boost.org/) / [Asio](https://think-async.com/Asio/) — 网络原语
+
+---
+
+<div align="center"><em>如果本项目对你有帮助，欢迎点亮 ⭐ Star / Star the repo if you find it useful.</em></div>

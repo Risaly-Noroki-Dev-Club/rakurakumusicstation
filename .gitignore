@@ -6,6 +6,19 @@ radioserver
 *.so
 *.a
 
+# 本地构建目录
+build/
+mybuild/
+cmake-build-*/
+
+# 测试/调试构建产物
+test_build
+test_build.*
+test_radioserver
+test_env
+test
+test.*
+
 # 依赖和第三方库
 crow_all.h
 *.dll
@@ -26,8 +39,14 @@ Thumbs.db
 
 # 媒体文件目录
 media/
+media_backup/
 
 # 会话和临时文件
 *.tmp
 *.temp
 *.log
+*.log.*
+*.bak
+*.save
+*.orig
+.server.pid
