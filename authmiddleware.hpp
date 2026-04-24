@@ -41,17 +41,21 @@ public:
     std::string get_session_id_from_cookies(const std::string& cookie_header) {
         if (cookie_header.empty()) return "";
 
-        size_t session_start = cookie_header.find("session_id=");
+        static const std::string kKey = "session_id=";
+        size_t session_start = cookie_header.find(kKey);
         if (session_start == std::string::npos) return "";
 
-        session_start += 10; // "session_id=".length()
+        session_start += kKey.length();
         size_t session_end = cookie_header.find(';', session_start);
 
-        if (session_end == std::string::npos) {
-            return cookie_header.substr(session_start);
-        } else {
-            return cookie_header.substr(session_start, session_end - session_start);
-        }
+        std::string value = (session_end == std::string::npos)
+            ? cookie_header.substr(session_start)
+            : cookie_header.substr(session_start, session_end - session_start);
+
+        size_t first = value.find_first_not_of(" \t");
+        size_t last = value.find_last_not_of(" \t");
+        if (first == std::string::npos) return "";
+        return value.substr(first, last - first + 1);
     }
 
     // 验证密码

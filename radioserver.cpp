@@ -851,15 +851,10 @@ private:
     }
     
     void setup_routes() {
-        // 简单的认证检查函数
-        auto is_authenticated = [this](const crow::request& req) -> bool {
-            // 简化认证逻辑，稍后实现
-            return false;
-        };
-        
         // 主页 - 根据是否登录显示不同界面
         CROW_ROUTE(app_, "/")([this](const crow::request& req) {
-            bool is_admin = false; // 暂时默认为非管理员
+            std::string session_id = get_session_id_from_cookies(req.get_header_value("Cookie"));
+            bool is_admin = check_admin_auth(session_id);
 
             try {
                 if (is_admin) {
@@ -867,13 +862,13 @@ private:
                     auto admin_context = std::map<std::string, std::string>{
                         {"CLIENT_COUNT", std::to_string(stream_server_->client_count())}
                     };
-                    
+
                     // 获取播放列表信息
                     std::lock_guard<std::mutex> lock(*playlist_mutex_);
                     admin_context["TRACK_COUNT"] = std::to_string(playlist_->size());
                     admin_context["CURRENT_TRACK"] = std::to_string(current_track_->load() + 1);
-                    
-                    return crow::response(render_template("admin_panel.html", admin_context, true));
+
+                    return crow::response(render_template("panel.html", admin_context, true));
                 } else {
                     // 普通用户显示收听界面
                     return crow::response(render_template("index.html", {}, false));
@@ -898,7 +893,7 @@ private:
             }
             
             try {
-                return crow::response(render_template("admin_login.html", {}, false));
+                return crow::response(render_template("login.html", {}, false));
             } catch (const std::exception& e) {
                 // 如果模板不存在，返回简单登录页面
                 std::string simple_login = R"html(
@@ -1038,7 +1033,7 @@ private:
             
             size_t new_index = (current_track_->load() + 1) % playlist_->size();
             current_track_->store(new_index);
-            audio_player_->skip_current_track(); // load_file is not implemented, use skip_current_track(*playlist_)[new_index]);
+            audio_player_->skip_current_track();
             
             return crow::response{200, "跳到下一首"};
         });
@@ -1059,7 +1054,7 @@ private:
             size_t size = playlist_->size();
             size_t new_index = (current_track_->load() + size - 1) % size;
             current_track_->store(new_index);
-            audio_player_->skip_current_track(); // load_file is not implemented, use skip_current_track(*playlist_)[new_index]);
+            audio_player_->skip_current_track();
             
             return crow::response{200, "跳到上一首"};
         });
@@ -1081,7 +1076,7 @@ private:
             if (index >= playlist_->size()) return crow::response{400, "索引超出范围"};
             
             current_track_->store(index);
-            audio_player_->skip_current_track(); // load_file is not implemented, use skip_current_track(*playlist_)[index]);
+            audio_player_->skip_current_track();
             
             return crow::response{200, "播放歌曲: " + std::to_string(index)};
         });
@@ -1108,7 +1103,7 @@ private:
             if (current >= playlist_->size()) {
                 current_track_->store(0);
                 if (!playlist_->empty()) {
-                    audio_player_->skip_current_track(); // load_file is not implemented, use skip_current_track(*playlist_)[0]);
+                    audio_player_->skip_current_track();
                 }
             }
             
@@ -1180,96 +1175,133 @@ private:
         });
     }
 
-    // 文件上传处理函数（从原始代码中保留）
+    // 文件上传处理函数：二进制安全的 multipart/form-data 解析
     crow::response handle_upload(const crow::request& req) {
         auto boundary_info = req.headers.find("Content-Type");
         if (boundary_info == req.headers.end()) return crow::response(400, "缺少Content-Type");
-        
+
         std::string content_type = boundary_info->second;
         auto boundary_pos = content_type.find("boundary=");
         if (boundary_pos == std::string::npos) return crow::response(400, "无效的Content-Type");
+
         std::string boundary = content_type.substr(boundary_pos + 9);
-        
-        std::istringstream body_stream(req.body);
-        std::string line;
-        size_t total_read = 0;
-        
-        while (std::getline(body_stream, line)) {
-            total_read += line.length() + 1;
-            if (line.find("Content-Disposition: form-data;") != std::string::npos &&
-                line.find("name=\"file\"") != std::string::npos) {
-                // 跳过两行空白行
-                std::getline(body_stream, line); total_read += line.length() + 1; // 跳过空行
-                std::getline(body_stream, line); total_read += line.length() + 1;
-                
-                // 读取文件名
-                auto filename_start = line.find("filename=\"");
-                if (filename_start == std::string::npos) continue;
-                filename_start += 10;
-                auto filename_end = line.find("\"", filename_start);
-                std::string filename = line.substr(filename_start, filename_end - filename_start);
-                
-                // 读取文件数据
-                std::vector<char> file_data;
-                while (std::getline(body_stream, line) && line != "--" + boundary + "--") {
-                    total_read += line.length() + 1;
-                    if (line.find("--" + boundary) == 0) break;
-                    
-                    line += "\n"; // 恢复被getline移除的换行符
-                    file_data.insert(file_data.end(), line.begin(), line.end());
-                }
-                
-                // 移除末尾多余的换行符
-                while (!file_data.empty() && (file_data.back() == '\n' || file_data.back() == '\r')) {
-                    file_data.pop_back();
-                }
-                
-                // 保存文件
-                if (file_data.empty()) {
-                    return crow::response(400, "上传的文件为空");
-                }
-                
-                // 检查扩展名
-                bool supported = false;
-                for (const auto& ext : Config::SUPPORTED_FORMATS) {
-                    if (filename.size() >= ext.size() && 
-                        filename.compare(filename.size() - ext.size(), ext.size(), ext) == 0) {
-                        supported = true;
-                        break;
-                    }
-                }
-                
-                if (!supported) {
-                    std::string supported_formats;
-                    for (const auto& ext : Config::SUPPORTED_FORMATS) supported_formats += ext + " ";
-                    return crow::response(400, "不支持的文件格式，支持: " + supported_formats);
-                }
-                
-                // 确保文件保存到media目录
-                std::string filepath = "./media/" + filename;
-                std::ofstream out_file(filepath, std::ios::binary);
-                if (!out_file) return crow::response(500, "无法创建文件");
-                out_file.write(file_data.data(), file_data.size());
-                out_file.close();
-
-                // 添加到播放列表
-                std::lock_guard<std::mutex> lock(*playlist_mutex_);
-                playlist_->push_back(filename);
-
-                // 提取元数据并添加到元数据播放列表
-                TrackMetadata metadata = MetadataManager::extract_metadata(filepath);
-                playlist_metadata_->push_back(metadata);
-
-                // 如果是第一首歌，开始播放
-                if (playlist_->size() == 1) {
-                    current_track_->store(0);
-                    audio_player_->skip_current_track(); // load_file is not implemented, use skip_current_trackfilename);
-                }
-
-                return crow::response(200, "上传成功: " + filename);
-            }
+        if (!boundary.empty() && boundary.front() == '"') {
+            auto end_quote = boundary.find('"', 1);
+            boundary = (end_quote == std::string::npos) ? boundary.substr(1) : boundary.substr(1, end_quote - 1);
+        } else {
+            auto semi = boundary.find(';');
+            if (semi != std::string::npos) boundary = boundary.substr(0, semi);
         }
-        
+        if (boundary.empty()) return crow::response(400, "无效的Content-Type");
+
+        const std::string& body = req.body;
+        if (body.size() > Config::MAX_UPLOAD_SIZE) {
+            return crow::response(413, "文件太大，最大50MB");
+        }
+
+        std::string delim = "--" + boundary;
+        size_t pos = body.find(delim);
+        if (pos == std::string::npos) return crow::response(400, "未找到分界符");
+
+        while (pos < body.size()) {
+            pos += delim.size();
+            // 结束分界符 "--boundary--"
+            if (pos + 2 <= body.size() && body[pos] == '-' && body[pos + 1] == '-') break;
+            // 跳过分界符后的 CRLF
+            if (pos + 2 <= body.size() && body[pos] == '\r' && body[pos + 1] == '\n') {
+                pos += 2;
+            } else if (pos < body.size() && body[pos] == '\n') {
+                pos += 1;
+            }
+
+            // 定位部分头结束位置（空行）
+            size_t headers_end = body.find("\r\n\r\n", pos);
+            size_t sep_len = 4;
+            if (headers_end == std::string::npos) {
+                headers_end = body.find("\n\n", pos);
+                sep_len = 2;
+                if (headers_end == std::string::npos) break;
+            }
+
+            std::string headers = body.substr(pos, headers_end - pos);
+            size_t data_start = headers_end + sep_len;
+
+            // 找到下一个分界符，确定数据结束位置
+            size_t next_delim = body.find(delim, data_start);
+            if (next_delim == std::string::npos) break;
+            size_t data_end = next_delim;
+            if (data_end >= 2 && body[data_end - 2] == '\r' && body[data_end - 1] == '\n') {
+                data_end -= 2;
+            } else if (data_end >= 1 && body[data_end - 1] == '\n') {
+                data_end -= 1;
+            }
+
+            // 解析 Content-Disposition：同一行既有 name 又有 filename
+            auto name_pos = headers.find("name=\"");
+            auto filename_pos = headers.find("filename=\"");
+            if (name_pos != std::string::npos && filename_pos != std::string::npos) {
+                name_pos += 6;
+                auto name_end = headers.find('"', name_pos);
+                std::string field_name = headers.substr(name_pos, name_end - name_pos);
+
+                if (field_name == "file") {
+                    filename_pos += 10;
+                    auto filename_end = headers.find('"', filename_pos);
+                    std::string filename = headers.substr(filename_pos, filename_end - filename_pos);
+
+                    // 去掉客户端可能附带的路径，防止目录穿越
+                    auto slash_pos = filename.find_last_of("/\\");
+                    if (slash_pos != std::string::npos) {
+                        filename = filename.substr(slash_pos + 1);
+                    }
+
+                    if (filename.empty()) {
+                        return crow::response(400, "文件名为空");
+                    }
+                    if (data_end <= data_start) {
+                        return crow::response(400, "上传的文件为空");
+                    }
+
+                    size_t file_size = data_end - data_start;
+
+                    bool supported = false;
+                    for (const auto& ext : Config::SUPPORTED_FORMATS) {
+                        if (filename.size() >= ext.size() &&
+                            filename.compare(filename.size() - ext.size(), ext.size(), ext) == 0) {
+                            supported = true;
+                            break;
+                        }
+                    }
+                    if (!supported) {
+                        std::string supported_formats;
+                        for (const auto& ext : Config::SUPPORTED_FORMATS) supported_formats += ext + " ";
+                        return crow::response(400, "不支持的文件格式，支持: " + supported_formats);
+                    }
+
+                    std::string filepath = "./media/" + filename;
+                    std::ofstream out_file(filepath, std::ios::binary);
+                    if (!out_file) return crow::response(500, "无法创建文件");
+                    out_file.write(body.data() + data_start, file_size);
+                    out_file.close();
+
+                    std::lock_guard<std::mutex> lock(*playlist_mutex_);
+                    playlist_->push_back(filename);
+
+                    TrackMetadata metadata = MetadataManager::extract_metadata(filepath);
+                    playlist_metadata_->push_back(metadata);
+
+                    if (playlist_->size() == 1) {
+                        current_track_->store(0);
+                        audio_player_->skip_current_track();
+                    }
+
+                    return crow::response(200, "上传成功: " + filename);
+                }
+            }
+
+            pos = next_delim;
+        }
+
         return crow::response(400, "未找到文件数据");
     }
 
@@ -1292,17 +1324,22 @@ private:
     static std::string get_session_id_from_cookies(const std::string& cookie_header) {
         if (cookie_header.empty()) return "";
 
-        size_t session_start = cookie_header.find("session_id=");
+        static const std::string kKey = "session_id=";
+        size_t session_start = cookie_header.find(kKey);
         if (session_start == std::string::npos) return "";
 
-        session_start += 10; // "session_id=".length()
+        session_start += kKey.length();
         size_t session_end = cookie_header.find(';', session_start);
 
-        if (session_end == std::string::npos) {
-            return cookie_header.substr(session_start);
-        } else {
-            return cookie_header.substr(session_start, session_end - session_start);
-        }
+        std::string value = (session_end == std::string::npos)
+            ? cookie_header.substr(session_start)
+            : cookie_header.substr(session_start, session_end - session_start);
+
+        // 去除首尾空白（Cookie 多值之间一般是 "; " 分隔）
+        size_t first = value.find_first_not_of(" \t");
+        size_t last = value.find_last_not_of(" \t");
+        if (first == std::string::npos) return "";
+        return value.substr(first, last - first + 1);
     }
 
     // 检查用户是否为管理员

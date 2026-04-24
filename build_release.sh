@@ -126,6 +126,9 @@ fi
 print_status "准备运行环境..."
 
 # 基础模板文件
+[ -f "login.html" ] && cp login.html $RELEASE_DIR/
+[ -f "panel.html" ] && cp panel.html $RELEASE_DIR/
+
 if [ -f "index.html" ]; then
     cp index.html $RELEASE_DIR/
 else
