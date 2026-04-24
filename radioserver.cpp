@@ -366,16 +366,15 @@ private:
     }
     
     void handle_new_connections() {
-        while (running_) {
-            sockaddr_in client_addr{};
-            socklen_t addr_len = sizeof(client_addr);
-            int client_fd = accept(server_fd_, (sockaddr*)&client_addr, &addr_len);
-            
-            if (client_fd < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) break;
-                perror("accept");
-                break;
-            }
+        sockaddr_in client_addr{};
+        socklen_t addr_len = sizeof(client_addr);
+        int client_fd = accept(server_fd_, (sockaddr*)&client_addr, &addr_len);
+
+        if (client_fd < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) return;  // 没有待处理的连接
+            perror("accept");
+            return;
+        }
             
             // 检查连接数限制
             {
@@ -383,7 +382,7 @@ private:
                 if (clients_.size() >= Config::MAX_CONNECTIONS) {
                     close(client_fd);
                     std::cout << "[Stream] Connection refused: limit reached" << std::endl;
-                    continue;
+                    return;
                 }
             }
             
@@ -397,7 +396,7 @@ private:
             if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, client_fd, &ev) < 0) {
                 perror("epoll_ctl");
                 close(client_fd);
-                continue;
+                return;
             }
             
             {
@@ -407,10 +406,9 @@ private:
             
             char ip_str[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str));
-            std::cout << "[Stream] New client: " << ip_str << ":" 
-          << ntohs(client_addr.sin_port) 
+            std::cout << "[Stream] New client: " << ip_str << ":"
+          << ntohs(client_addr.sin_port)
           << " (total: " << clients_.size() << ")" << std::endl;
-        }
     }
     
     void handle_client_write(int fd) {
@@ -559,14 +557,18 @@ private:
     void worker_loop() {
         while (running_) {
             // 等待播放列表中有音乐
+            bool playlist_empty = false;
             {
                 std::lock_guard<std::mutex> lock(*playlist_mutex_);
-                if (playlist_->empty()) {
-                    std::this_thread::sleep_for(std::chrono::seconds(2));
-                    continue;
-                }
+                playlist_empty = playlist_->empty();
             }
-            
+
+            if (playlist_empty) {
+                // 播放列表为空时适当延长等待时间，减少CPU使用
+                std::this_thread::sleep_for(std::chrono::seconds(5));
+                continue;
+            }
+
             play_next_track();
         }
     }
@@ -602,6 +604,8 @@ private:
             std::cerr << "[Audio] File not found: " << filename << std::endl;
             std::cerr << "[Audio] Current working directory: " << fs::current_path() << std::endl;
             (*current_track_)++;
+            // 文件不存在时增加延迟，避免快速循环消耗CPU
+            std::this_thread::sleep_for(std::chrono::seconds(1));
             return;
         }
 
@@ -616,6 +620,9 @@ private:
         pipe = popen(cmd.c_str(), "r");
         if (!pipe) {
             std::cerr << "[Audio] Failed to start FFmpeg" << std::endl;
+            (*current_track_)++;  // 播放失败时也换下一首
+            // FFmpeg启动失败时增加延迟
+            std::this_thread::sleep_for(std::chrono::seconds(1));
             return;
         }
         pipe_opened = true;
