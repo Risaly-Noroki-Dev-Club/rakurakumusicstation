@@ -3,7 +3,8 @@
 A lightweight, high-performance C++ streaming broadcast server for low-latency audio distribution, with a built-in web admin panel.
 
 一个轻量级、高性能的 C++ 流媒体广播服务器，支持低延迟音频分发，内置 Web 管理面板。
-
+##注意：本项目已经完结。请移步Rakurakumusicstation-NG获取最新体验
+##Note: This project has been completed. Please move to RakurakumusicStation-ng for the latest experience
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
 ![C++](https://img.shields.io/badge/C++-17-orange.svg)
